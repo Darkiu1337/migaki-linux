@@ -1155,29 +1155,47 @@ step_symlinks() {
 
 step_desktop_entries() {
   [ "$DESKTOP" = "1" ] || return 0
-  step "Desktop entries"
+  step "Desktop entry"
   mkdir -p "$HOME/.local/share/applications"
-  cat > "$HOME/.local/share/applications/anime4k.desktop" <<EOF2
-[Desktop Entry]
-Name=Anime4K Launcher
-Comment=Launch games with Anime4K Restore filters
-Exec=bash -lc '$ROOT/scripts/anime4k'
-Terminal=true
-Type=Application
-Categories=Game;
-EOF2
   if [ -f "$ROOT/gui/app.py" ]; then
     cat > "$HOME/.local/share/applications/anime4k-gui.desktop" <<EOF2
 [Desktop Entry]
 Name=Anime4K Launcher (GUI)
 Comment=Launch games with Anime4K Restore filters
 Exec=$ROOT/gui/app.py
+Icon=anime4k
 Terminal=false
 Type=Application
 Categories=Game;
+StartupNotify=true
+StartupWMClass=anime4k-gui
 EOF2
   fi
-  ok "desktop entries installed"
+
+  # App icon: deploy the generated hicolor set (plus a pixmaps fallback) so
+  # the entry above resolves Icon=anime4k. Skipped on checkouts that predate
+  # assets/icons/.
+  if [ -d "$ROOT/assets/icons/png" ]; then
+    for s in 16 24 32 48 64 128 256; do
+      src="$ROOT/assets/icons/png/anime4k-$s.png"
+      [ -f "$src" ] || continue
+      install -Dm644 "$src" \
+        "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/anime4k.png"
+    done
+    [ -f "$ROOT/assets/icons/anime4k.svg" ] && \
+      install -Dm644 "$ROOT/assets/icons/anime4k.svg" \
+        "$HOME/.local/share/icons/hicolor/scalable/apps/anime4k.svg"
+    [ -f "$ROOT/assets/icons/png/anime4k-256.png" ] && \
+      install -Dm644 "$ROOT/assets/icons/png/anime4k-256.png" \
+        "$HOME/.local/share/pixmaps/anime4k.png"
+  fi
+
+  command -v update-desktop-database >/dev/null 2>&1 && \
+    update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
+  command -v gtk-update-icon-cache >/dev/null 2>&1 && \
+    gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+
+  ok "desktop entry + app icon installed"
 }
 
 # ===========================================================================

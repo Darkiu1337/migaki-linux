@@ -25,3 +25,7 @@ translate/vendor/
 # VN-translate local settings (seeded from *.sample by install.sh, never commit)
 translate/config.json
 translate/translate.json
+
+# app-icon generator (local dev tooling; the rendered icons are committed)
+assets/icons/gen_icon.py
+assets/icons/make-icons.sh

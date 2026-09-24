@@ -20,7 +20,8 @@ from PySide6.QtCore import (QAbstractListModel, QModelIndex, QObject, Qt,
                             QProcess, QProcessEnvironment, QTimer, QUrl,
                             Signal, Slot, Property, QMetaObject, Q_ARG,
                             QCoreApplication, qInstallMessageHandler)
-from PySide6.QtGui import QGuiApplication, QPalette, QFont, QFontDatabase
+from PySide6.QtGui import (QGuiApplication, QPalette, QFont, QFontDatabase,
+                           QIcon)
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuickControls2 import QQuickStyle
 
@@ -1054,6 +1055,12 @@ def _diagnose(app, engine, model, backend):
 def main():
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Anime4K Launcher")
+    # Match the .desktop entry (Icon=anime4k) so the compositor shows our
+    # icon on the window/taskbar, and set it directly as a fallback.
+    app.setDesktopFileName("anime4k-gui")
+    _icon = os.path.join(REPO_ROOT, "assets", "icons", "png", "anime4k-256.png")
+    if os.path.isfile(_icon):
+        app.setWindowIcon(QIcon(_icon))
     qInstallMessageHandler(_capture_qt_messages)
     apply_style()
     app._base_font = app.font()

@@ -54,6 +54,23 @@ for desk in anime4k.desktop anime4k-gui.desktop; do
     echo "removed desktop entry $desk"
   fi
 done
+# App icon deployed by install.sh --desktop (hicolor set + pixmaps fallback).
+_icon_removed=0
+for s in 16 24 32 48 64 128 256; do
+  f="$HOME/.local/share/icons/hicolor/${s}x${s}/apps/anime4k.png"
+  [ -f "$f" ] && { rm -f "$f"; _icon_removed=1; }
+done
+for f in "$HOME/.local/share/icons/hicolor/scalable/apps/anime4k.svg" \
+         "$HOME/.local/share/pixmaps/anime4k.png"; do
+  [ -f "$f" ] && { rm -f "$f"; _icon_removed=1; }
+done
+if [ "$_icon_removed" = "1" ]; then
+  command -v gtk-update-icon-cache >/dev/null 2>&1 && \
+    gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+  command -v update-desktop-database >/dev/null 2>&1 && \
+    update-desktop-database "$HOME/.local/share/applications" >/dev/null 2>&1 || true
+  echo "removed deployed app icon"
+fi
 # GNOME Shell extension for the textbox Top, if install.sh deployed it.
 _ak_ext="$HOME/.local/share/gnome-shell/extensions/vn-textbox-top@anime4k"
 if [ -d "$_ak_ext" ]; then
