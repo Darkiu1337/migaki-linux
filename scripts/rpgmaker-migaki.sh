@@ -115,13 +115,25 @@ rm -f "$HOME/.config/RPG Maker MV/MZ (cicpoffs mount)/Singleton"* 2>/dev/null ||
 export XDG_SESSION_TYPE=x11
 case "${GPU:-auto}" in
   nvidia|amd|intel)
+    # Chromium/ANGLE-Vulkan only works on X11 ozone here, and X11 belongs to a
+    # single GPU: a forced GPU other than the display one cannot present a
+    # swapchain (its GPU process fails vkCreateSwapchainKHR, the game drops to
+    # Canvas2D — no filter, no overlay, no WebGL). Use the display GPU unless
+    # explicitly forced.
+    _disp="$(ak_display_gpu_vendor || true)"
+    if [ -z "${MIGAKI_FORCE_GPU:-}" ] && [ -n "$_disp" ] && [ "$_disp" != "$GPU" ]; then
+      ak_log "warning: '$GPU' cannot present this Chromium/Vulkan window — X11 is on '$_disp'."
+      ak_log "         forcing it drops the filter, the overlay and WebGL."
+      ak_log "         using the display GPU ($_disp); set MIGAKI_FORCE_GPU=1 to override."
+      GPU="$_disp"
+    fi
     if _icd="$(ak_icd_file "$GPU")"; then
       export VK_ICD_FILENAMES="$_icd"
     else
       ak_log "warning: no $GPU Vulkan ICD found; using the loader default"
       unset VK_ICD_FILENAMES
     fi
-    unset _icd
+    unset _icd _disp
     ;;
   auto) unset VK_ICD_FILENAMES ;;
   *) ak_die "--gpu needs nvidia, amd, intel or auto" ;;

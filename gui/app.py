@@ -264,6 +264,7 @@ class GuiBackend(QObject):
         # Load the cached list (instant, no vulkaninfo at startup); a cold or
         # stale cache warms lazily on the first listGpus() call.
         self._gpus, self._gpu_stale = system.gpu_cache(fingerprint=self._gpu_fp)
+        self._display_vendor = None
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.poll_bridge)
         self._timer.start(3000)
@@ -412,6 +413,18 @@ class GuiBackend(QObject):
         """Force a fresh GPU probe (Settings > Refresh GPUs)."""
         self._gpu_stale = True
         self.warm_gpus()
+
+    @Slot(result=str)
+    def displayGpuVendor(self):
+        """Vendor of the X11/display GPU ('nvidia'|'amd'|'intel'), or ''.
+        Cached: glxinfo is only probed once per session."""
+        if self._display_vendor is None:
+            self._display_vendor = system.display_gpu_vendor()
+        return self._display_vendor
+
+    @Slot(str, result=str)
+    def gpuVendor(self, name):
+        return commands.gpu_vendor(name)
 
     def warm_gpus(self):
         if self._gpu_warming:

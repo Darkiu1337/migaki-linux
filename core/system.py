@@ -81,6 +81,29 @@ def list_gpus():
     return names
 
 
+def display_gpu_vendor():
+    """Vendor of the GPU owning the X11/XWayland session ('nvidia'|'amd'|
+    'intel'), or ''. That is the only GPU that can present a Vulkan swapchain
+    for a windowed app here: Chromium/ANGLE-Vulkan needs X11 ozone, so a forced
+    non-display GPU cannot filter (see scripts/rpgmaker-migaki.sh)."""
+    try:
+        out = subprocess.run(["glxinfo", "-B"], capture_output=True, text=True,
+                             timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    for line in out.splitlines():
+        if line.startswith("OpenGL renderer string:"):
+            r = line.split(":", 1)[1]
+            if "NVIDIA" in r:
+                return "nvidia"
+            if any(k in r for k in ("AMD", "Radeon", "ATI")):
+                return "amd"
+            if "Intel" in r:
+                return "intel"
+            return ""
+    return ""
+
+
 def gpu_fingerprint():
     """Cheap hardware fingerprint (vendor:device per DRM card) used to
     invalidate the cached GPU list on a GPU add/remove/swap. Reads sysfs

@@ -22,6 +22,25 @@ Dialog {
 
     ButtonGroup { id: runnerGroup }
 
+    // The X11/display GPU is the only one that can present a filtered
+    // Chromium (RPGMaker) window; tag it and warn on a mismatched pick.
+    function gpuLabel(name) {
+        return name + (isDisplayGpu(name) ? "  (display)" : "")
+    }
+    function isDisplayGpu(name) {
+        var dv = backend.displayGpuVendor()
+        return dv !== "" && backend.gpuVendor(name) === dv
+    }
+    function gpuMismatch() {
+        if (root.runner !== "rpgmaker")
+            return false
+        var dv = backend.displayGpuVendor()
+        if (dv === "")
+            return false
+        var v = backend.gpuVendor(gpuCombo.currentText)
+        return v !== "" && v !== dv
+    }
+
     Connections {
         target: backend
         function onGpusChanged() {
@@ -339,6 +358,25 @@ Dialog {
                         ComboBox {
                             id: gpuCombo
                             Layout.fillWidth: true
+                            // Tag the display GPU for display only; the stored
+                            // value stays the raw model text (currentText).
+                            displayText: root.gpuLabel(currentText)
+                            delegate: ItemDelegate {
+                                width: gpuCombo.width
+                                text: root.gpuLabel(modelData)
+                                highlighted: gpuCombo.highlightedIndex === index
+                            }
+                        }
+                        Label {
+                            id: gpuWarn
+                            visible: root.gpuMismatch()
+                            Layout.columnSpan: 2
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#e0a030"
+                            text: "RPGMaker titles are Chromium/ANGLE-Vulkan and can only filter on the display GPU. "
+                                  + "On any other GPU Chromium drops Vulkan — no filter, no overlay, and no WebGL. "
+                                  + "Pick the GPU marked (display)."
                         }
                         Label { text: "FPS cap (0 = off):" }
                         SpinBox {

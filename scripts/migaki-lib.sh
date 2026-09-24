@@ -269,6 +269,24 @@ print((nvidia or disc or [""])[0])
   return 1
 }
 
+# Vendor of the GPU that owns the X11/XWayland session — the only one that can
+# present a Vulkan swapchain for a windowed app. Chromium/ANGLE-Vulkan only
+# works on X11 ozone, so a forced non-display GPU cannot filter (its GPU
+# process fails vkCreateSwapchainKHR and the game drops to Canvas2D). Prints
+# nvidia|amd|intel, or nothing (returns 1) when glxinfo is unavailable.
+ak_display_gpu_vendor() {
+  command -v glxinfo >/dev/null 2>&1 || return 1
+  local r
+  r="$(glxinfo -B 2>/dev/null | sed -n 's/^OpenGL renderer string: //p' | head -n 1)"
+  [ -n "$r" ] || return 1
+  case "$r" in
+    *NVIDIA*) printf 'nvidia' ;;
+    *AMD*|*Radeon*|*ATI*) printf 'amd' ;;
+    *Intel*) printf 'intel' ;;
+    *) return 1 ;;
+  esac
+}
+
 # Preset family manifest (Clear: 3D-clarity effect chains, see the file's
 # comments). Prefer the repo copy so tuning shaders/presets.json takes effect
 # on the next launch; a deployed copy is the fallback for standalone installs.

@@ -3,6 +3,18 @@ import os
 from . import paths
 
 
+def gpu_vendor(name):
+    """Vendor token (nvidia|amd|intel) for a GPU display name, or '' when
+    unknown (e.g. the 'auto …' entry)."""
+    if "NVIDIA" in name:
+        return "nvidia"
+    if any(k in name for k in ("AMD", "ATI", "Radeon")):
+        return "amd"
+    if "Intel" in name:
+        return "intel"
+    return ""
+
+
 def gpu_icd(name):
     if name.startswith("auto"):
         return "auto"

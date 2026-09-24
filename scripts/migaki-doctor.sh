@@ -97,6 +97,13 @@ if DGPU="$(ak_discrete_gpu_name)"; then
 else
   echo "note: no discrete GPU detected — proton launches use the loader default (override with --dxvk-device)"
 fi
+# The X11/display GPU is the only one that can present a filtered
+# Chromium (RPGMaker) window; report it so a bad GPU pick is explainable.
+if DISPGPU="$(ak_display_gpu_vendor)"; then
+  ok "display GPU (X11): $DISPGPU — the only GPU that can filter Chromium/RPGMaker titles"
+else
+  echo "note: display GPU unknown (glxinfo missing) — RPGMaker GPU check skipped"
+fi
 
 # 5. Runner backends.
 if command -v umu-run >/dev/null 2>&1; then
