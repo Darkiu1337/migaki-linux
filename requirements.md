@@ -11,7 +11,7 @@ from upstream docs — confirmations welcome.
 | jq | `jq` [verified] | `jq` | `jq` | TUI library |
 | gum | `gum` [verified] | release `.deb` (charmbracelet/gum) | `gum` | TUI only |
 | zenity | `zenity` [verified] | `zenity` | `zenity` | file pickers |
-| vkBasalt | AUR `vkbasalt`, else automated source build [verified: source build] | `vkbasalt`, else source build | `vkBasalt`, else source build | the filter runtime; `install.sh` handles both; verify with `anime4k doctor` |
+| vkBasalt | AUR `vkbasalt`, else automated source build [verified: source build] | `vkbasalt`, else source build | `vkBasalt`, else source build | the filter runtime; `install.sh` handles both; verify with `migaki doctor` |
 | mangohud | `mangohud` [verified] | `mangohud` | `mangohud` | fps cap + overlay |
 | vulkan-tools | `vulkan-tools` [verified] | `vulkan-tools` | `vulkan-tools` | optional: device list, `vkcube` test |
 | pciutils | `pciutils` [verified] | `pciutils` | `pciutils` | optional: `lspci` fallback for GPU detection when `/sys/class/drm` is unavailable |
@@ -27,7 +27,7 @@ native KDE file picker, `qdbus6` for the textbox Top on KDE Wayland, and
 Filter selection needs nothing extra: the Restore variants are `.fx` files
 shipped here, and the 3D **Clear** presets use vkBasalt built-ins (`cas`,
 `smaa`) plus the shipped `shaders/ClearColor.fx`. `install.sh` deploys both to
-the shader dir; `anime4k doctor` verifies each preset renders.
+the shader dir; `migaki doctor` verifies each preset renders.
 
 ## Per-runner optionals
 
@@ -74,8 +74,8 @@ pinned; a build without new WoW64 support is flagged and falls back to
 UMU-Proton at launch. The picker stores an **absolute path** in `proton`
 (`""` = umu-managed); `install.sh` seeds the verified build's path, and a bare
 or stale value is resolved by name — otherwise the runner falls back to
-UMU-Proton. `anime4k doctor` validates that the configured Proton resolves.
-There is no in-app theme switch. `anime4k-gui --diagnose`
+UMU-Proton. `migaki doctor` validates that the configured Proton resolves.
+There is no in-app theme switch. `migaki-gui --diagnose`
 prints the resolved style, font and palette, and `--self-test` loads the whole
 UI headlessly (see README).
 
@@ -87,7 +87,7 @@ Fetched at install time (pinned + checksum-verified, never committed):
 |---|---|---|---|---|
 | python-websocket-client | `python-websocket-client` [verified] | `python3-websocket` | `python3-websocket-client` | hook bridge client; installer handles it |
 | python-requests | `python-requests` [verified] | `python3-requests` | `python-requests` | DeepL browser automation; installer handles it |
-| Textractor + bridge | fetched by `install.sh` | same | same | Chenx221 build + kuroahna bridge (or hardened v2 fork asset). Provisioned once under `~/.local/share/anime4k/textractor`, symlinked into each prefix; the bundled bridge-only `SavedExtensions.txt` is force-applied so Textractor never loads its stock translate extensions |
+| Textractor + bridge | fetched by `install.sh` | same | same | Chenx221 build + kuroahna bridge (or hardened v2 fork asset). Provisioned once under `~/.local/share/migaki/textractor`, symlinked into each prefix; the bundled bridge-only `SavedExtensions.txt` is force-applied so Textractor never loads its stock translate extensions |
 | Chromium browser (any) | auto-detected [verified: default-browser-first + CDP smoke test] | same | same | Brave/Chromium/Chrome/Edge/Vivaldi/Opera; default browser preferred, isolated debug profile always; installer records the pick in `translate/config.json` |
 
 The textbox **Top** button is enforced per compositor, always **stacking-only**
@@ -97,5 +97,5 @@ script over `qdbus6` (from `qt6-tools`/`qttools`, normally already present),
 X11 via Qt's native keep-above hint, and GNOME Wayland via the optional bundled
 Shell extension (`gnome-extensions`, from `gnome-shell`; installed by
 `install.sh`, may need a re-login). Sway and unknown Wayland compositors expose
-no keep-above for normal windows — Float still applies. `anime4k doctor`
+no keep-above for normal windows — Float still applies. `migaki doctor`
 reports which backend is active.

@@ -1,13 +1,13 @@
-// vn-textbox-top@anime4k
+// vn-textbox-top@migaki
 //
-// Keeps the anime4k translation textbox ("vn-translate") above other windows
+// Keeps the migaki translation textbox ("vn-translate") above other windows
 // on GNOME/Wayland, where no client always-on-top API exists.
 //
 // SAFETY: stacking order only. This extension must NEVER focus/activate a
 // window or touch the pointer (see docs/translate.md "Compositor control
 // safety"); it only calls Meta.Window.make_above()/unmake_above().
 //
-// State: ~/.cache/anime4k/gnome-vn-textbox-top holds "1" (Top on) or "0"
+// State: ~/.cache/migaki/gnome-vn-textbox-top holds "1" (Top on) or "0"
 // (Top off); the textbox writes it when the Top button toggles.
 
 import GLib from 'gi://GLib';
@@ -19,7 +19,7 @@ const POLL_MS = 1000;
 
 function stateFile() {
     return GLib.build_filenamev([
-        GLib.get_user_cache_dir(), 'anime4k', 'gnome-vn-textbox-top']);
+        GLib.get_user_cache_dir(), 'migaki', 'gnome-vn-textbox-top']);
 }
 
 function wantTop() {

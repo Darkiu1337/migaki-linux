@@ -1,6 +1,7 @@
-# anime4k-restore-linux
+# Migaki
 
-Anime4K **Restore** CNN filters on Linux — the Magpie-on-Windows look
+**Migaki** (磨き, "polish") runs the **Anime4K Restore** CNN filters on Linux —
+the Magpie-on-Windows look
 (game at full resolution, restoration filter on top), without upscaling,
 capture tricks, or a compositor in the middle. Each game renders normally;
 the filter processes every presented frame through the vkBasalt Vulkan layer.
@@ -42,7 +43,7 @@ The effect is easier to notice while playing than in stills.
 
 ## Usage example with comparison
 
-[![Usage demo — filtered gameplay (Restore L)](docs/assets/usage-poster.jpg)](https://darkiu1337.github.io/anime4k-restore-linux/docs/assets/usage.mp4)
+[![Usage demo — filtered gameplay (Restore L)](docs/assets/usage-poster.jpg)](https://darkiu1337.github.io/migaki-linux/docs/assets/usage.mp4)
 
 *Usage demo — filtered gameplay (Restore L).*
 
@@ -101,17 +102,17 @@ that is the whole effect. Nothing is upscaled; resolution never changes.
 ## Install
 
 ```sh
-git clone https://github.com/Darkiu1337/anime4k-restore-linux.git && cd anime4k-restore-linux
+git clone https://github.com/Darkiu1337/migaki-linux.git && cd migaki-linux
 ./install.sh            # one flow: deps, vkBasalt, Proton, RPGMaker, shaders, translation, symlinks
 ./install.sh --check-only   # audit only (no changes)
 ./install.sh --dry-run      # show what would be installed
-anime4k                 # TUI  |  anime4k-gui  # Qt GUI
+migaki                 # TUI  |  migaki-gui  # Qt GUI
 ```
 
 Details: `requirements.md`. One shared Wine prefix lives under
-`~/.local/share/anime4k/prefixes/`; personal defaults in
-`~/.config/anime4k/config.json`. The installer symlinks `anime4k` /
-`anime4k-gui` (plus `vn-launch` / `vn-textbox` / `vn-translate` with
+`~/.local/share/migaki/prefixes/`; personal defaults in
+`~/.config/migaki/config.json`. The installer symlinks `migaki` /
+`migaki-gui` (plus `vn-launch` / `vn-textbox` / `vn-translate` with
 translation support) into `~/.local/bin` and offers to add it to `PATH`.
 
 In the GUI, the top bar has **Settings** (Wine prefix, Proton picker, per-app
@@ -125,15 +126,15 @@ library or config.
 ## Troubleshooting
 
 ```sh
-anime4k doctor                 # audit the whole chain (filter, runners, translation, GUI)
-anime4k-gui --diagnose         # versions, paths, style/font/palette, QML context validity
-anime4k-gui --self-test        # load the entire UI headlessly; fails on any QML error
+migaki doctor                 # audit the whole chain (filter, runners, translation, GUI)
+migaki-gui --diagnose         # versions, paths, style/font/palette, QML context validity
+migaki-gui --self-test        # load the entire UI headlessly; fails on any QML error
 ```
 
 The GUI and the translation textbox are Qt Quick using the **KDE Quick
 Controls style**, so both follow your desktop colour scheme (e.g. Omarchy's
 KDE theme) including light/dark — no in-app theme switch. Runtime QML errors
-are also appended to `~/.cache/anime4k/gui.log`.
+are also appended to `~/.cache/migaki/gui.log`.
 
 ## Layout
 

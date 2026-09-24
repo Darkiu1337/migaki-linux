@@ -2,12 +2,12 @@
 # vn-launch.sh — universal single-container VN launcher (replaces mlove-hook.sh).
 # One umu-run -> wscript -> per-game launch.vbs (hooker + game, one wineserver).
 # Filter (Anime4K Restore via vkBasalt) is applied in-process when --filter is
-# given, by sourcing anime4k-lib.sh — the same mechanism as proton-anime4k.sh,
+# given, by sourcing migaki-lib.sh — the same mechanism as proton-migaki.sh,
 # so filter + translation compose in one launch.
 # Usage: vn-launch.sh --game ID [--setup] [--show-hooker] [--filter VARIANT|off] [--dry-run]
 #                      | --exe PATH --gameid ID [--lang LOCALE] [--hook-code CODE] [--setup] [--show-hooker] [--filter ...] [--dry-run]
 #                      | --stop ID | --stop-exe PATH | --status | --list
-#   --exe bypasses the games registry (used by anime4k GUI/TUI: games.json is
+#   --exe bypasses the games registry (used by migaki GUI/TUI: games.json is
 #     the single registry there). --gameid/--lang default sanely with --exe.
 #     --hook-code seeds Textractor's SavedHooks so the recorded hook
 #     auto-inserts at attach (no manual Add-hook).
@@ -16,7 +16,7 @@
 #            Default (play mode): Textractor HIDDEN (style 0), game normal.
 set -e
 # install.sh symlinks vn-launch into ~/.local/bin; resolve the real path or
-# HERE points at the link and anime4k-lib.sh / the .vbs template vanish.
+# HERE points at the link and migaki-lib.sh / the .vbs template vanish.
 _SRC="${BASH_SOURCE[0]}"
 while [ -L "$_SRC" ]; do
   _DIR="$(cd "$(dirname "$_SRC")" && pwd)"
@@ -31,7 +31,7 @@ REG="$HERE/translate.json"
 BRIDGE="${TRANSLATE_BRIDGE:-fixed}"
 # Shared core (config, variants, vkBasalt, WoW64). Sourced early so --no-wow64
 # applies even with --filter off; docs/limits.md.
-AK_LIB="$(dirname "$HERE")/scripts/anime4k-lib.sh"
+AK_LIB="$(dirname "$HERE")/scripts/migaki-lib.sh"
 if [ -f "$AK_LIB" ]; then
   # shellcheck disable=SC1090
   source "$AK_LIB"
@@ -76,10 +76,10 @@ if [ "$CMD" = "list" ]; then
   exit 0
 fi
 
-PREFIX="$(python3 -c "import json; print(json.load(open('$HOME/.config/anime4k/config.json')).get('prefix', ''))" 2>/dev/null || true)"
-[ -n "$PREFIX" ] || PREFIX="$HOME/.local/share/anime4k/prefixes/default"
+PREFIX="$(python3 -c "import json; print(json.load(open('$HOME/.config/migaki/config.json')).get('prefix', ''))" 2>/dev/null || true)"
+[ -n "$PREFIX" ] || PREFIX="$HOME/.local/share/migaki/prefixes/default"
 [ -n "${PREFIX_OVERRIDE:-}" ] && PREFIX="$PREFIX_OVERRIDE"
-PROTON="$(python3 -c "import json; print(json.load(open('$HOME/.config/anime4k/config.json')).get('proton', ''))" 2>/dev/null || true)"
+PROTON="$(python3 -c "import json; print(json.load(open('$HOME/.config/migaki/config.json')).get('proton', ''))" 2>/dev/null || true)"
 # Resolve a path or bare build name to an absolute dir; otherwise fall back to
 # umu-managed. A bare label would otherwise be exported as PROTONPATH and umu
 # would fail to find Proton (game never boots, bridge stays down).
@@ -123,7 +123,7 @@ fi
 TRX="$PREFIX/drive_c/Textractor/x86/Textractor.exe"
 if [ "$DRYRUN" != "1" ] && [ "$CMD" = "launch" ]; then
   if ! command -v ak_textractor_ensure >/dev/null 2>&1; then
-    echo "error: anime4k-lib.sh not found at $AK_LIB" >&2; exit 1
+    echo "error: migaki-lib.sh not found at $AK_LIB" >&2; exit 1
   fi
   TRX="$(ak_textractor_ensure "$PREFIX" "$BRIDGE")" \
     || { echo "error: Textractor provisioning failed (re-run ./install.sh)" >&2; exit 1; }
@@ -264,14 +264,14 @@ else
   export LANG="$LANG_SET" HOST_LC_ALL="$LANG_SET"
 fi
 if command -v ak_wow64_env >/dev/null 2>&1; then ak_wow64_env "$PREFIX" "$WOW64"; fi
-# Filter: same vkBasalt mechanism as proton-anime4k.sh (variant conf + layer env).
+# Filter: same vkBasalt mechanism as proton-migaki.sh (variant conf + layer env).
 if [ "$FILTER" != "off" ]; then
   if command -v ak_vkbasalt_env >/dev/null 2>&1; then
     FILTER="$(ak_variant "$FILTER")"
     ak_vkbasalt_env "$FILTER"
     echo "filter=$FILTER conf=$VKBASALT_CONFIG_FILE"
   else
-    echo "warning: anime4k-lib.sh not found at $AK_LIB; launching unfiltered" >&2
+    echo "warning: migaki-lib.sh not found at $AK_LIB; launching unfiltered" >&2
     FILTER="off"
   fi
 fi
@@ -284,7 +284,7 @@ if [ "$DRYRUN" = "1" ]; then
   exit 0
 fi
 echo "launching $GAME [$MODE] (end session with Ctrl-C)…"
-# cwd = game dir (same as proton-anime4k.sh): the engine loads its data files
+# cwd = game dir (same as proton-migaki.sh): the engine loads its data files
 # relative to cwd, and WScript.Shell.CurrentDirectory is unreliable for
 # non-ASCII Windows paths (e.g. Z:\home\dd\Área de trabalho\...).
 cd "$GDIR" || { echo "cannot enter game dir: $GDIR" >&2; exit 1; }

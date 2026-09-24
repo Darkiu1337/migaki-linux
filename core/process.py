@@ -307,7 +307,7 @@ def spawn_textbox(gid=None):
     if textbox_pids():
         return None, "textbox: already running (one instance only)."
     try:
-        logdir = os.path.expanduser("~/.cache/anime4k")
+        logdir = os.path.expanduser("~/.cache/migaki")
         os.makedirs(logdir, exist_ok=True)
         logf = open(os.path.join(logdir, "textbox.log"), "ab", buffering=0)
     except OSError:
@@ -316,6 +316,6 @@ def spawn_textbox(gid=None):
         proc = subprocess.Popen(argv, stdout=logf, stderr=logf,
                                 stdin=subprocess.DEVNULL, start_new_session=True,
                                 env=env)
-        return proc, "textbox: started (stderr -> ~/.cache/anime4k/textbox.log)"
+        return proc, "textbox: started (stderr -> ~/.cache/migaki/textbox.log)"
     except (OSError, subprocess.SubprocessError) as e:
         return None, f"textbox: could not open ({e})"

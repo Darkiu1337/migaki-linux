@@ -25,7 +25,7 @@ def build_command(game):
     wow64 = game.get("wow64", "")
     path = game["path"]
     if runner == "proton":
-        argv = [os.path.join(paths.SCRIPTS_DIR, "proton-anime4k.sh"),
+        argv = [os.path.join(paths.SCRIPTS_DIR, "proton-migaki.sh"),
                 "--variant", variant, "--fps", fps,
                 "--prefix-mode", pmode if pmode in ("shared", "game") else "shared"]
         if wow64 == "0":
@@ -40,14 +40,14 @@ def build_command(game):
             argv += ["--dxvk-device", gpu]
         argv.append(path)
     elif runner == "rpgmaker":
-        argv = [os.path.join(paths.SCRIPTS_DIR, "rpgmaker-anime4k.sh"),
+        argv = [os.path.join(paths.SCRIPTS_DIR, "rpgmaker-migaki.sh"),
                 "--variant", variant, "--gpu", gpu_icd(gpu),
                 "--fps", fps]
         if hud == "1":
             argv.append("--hud")
         argv += ["--gamepath", path]
     else:
-        argv = [os.path.join(paths.SCRIPTS_DIR, "native-anime4k.sh"),
+        argv = [os.path.join(paths.SCRIPTS_DIR, "native-migaki.sh"),
                 "--variant", variant, "--gpu", gpu_icd(gpu),
                 "--fps", fps]
         if hud == "1":

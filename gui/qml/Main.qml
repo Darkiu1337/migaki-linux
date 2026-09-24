@@ -5,7 +5,7 @@ import QtQuick.Layouts
 ApplicationWindow {
     id: root
     objectName: "mainWindow"
-    title: "Anime4K Launcher"
+    title: "Migaki"
     width: 1100
     height: 700
     visible: true

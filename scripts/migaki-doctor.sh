@@ -1,18 +1,18 @@
 #!/bin/bash
-# anime4k-doctor — self-test the Anime4K Restore filter chain + translation
+# migaki-doctor — self-test the Anime4K Restore filter chain + translation
 # readiness, without any game.
 # Checks, in order: layer manifest, library resolution, shaders, GPUs,
 # runner backends, 32-bit/WoW64 posture, (with a display) a live
 # vkcube+vkBasalt run, and the translation deps (bridge client, requests,
 # textbox, QML modules, browser, GUI self-test).
 # Exit 0 = chain ready, 1 = problems found. Never touches user config.
-# Usage: anime4k-doctor [--live/--no-live]  (also: anime4k doctor)
+# Usage: migaki-doctor [--live/--no-live]  (also: migaki doctor)
 _SRC="${BASH_SOURCE[0]}"
 while [ -L "$_SRC" ]; do _SRC="$(readlink "$_SRC")"; case "$_SRC" in /*) :;; *) _SRC="$(dirname "${BASH_SOURCE[0]}")/$_SRC";; esac; done
 SCRIPT_DIR="$(cd "$(dirname "$_SRC")" && pwd)"
 unset _SRC
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/anime4k-lib.sh"
+source "$SCRIPT_DIR/migaki-lib.sh"
 
 LIVE="auto"
 while [ $# -gt 0 ]; do
@@ -35,7 +35,7 @@ MANIFEST=""
 if MANIFEST="$(ak_vkbasalt_manifest)"; then
   ok "layer manifest: $MANIFEST"
 else
-  bad "no vkBasalt layer manifest (set layer_dir in $ANIME4K_CONFIG or install vkbasalt; see requirements.md)"
+  bad "no vkBasalt layer manifest (set layer_dir in $MIGAKI_CONFIG or install vkbasalt; see requirements.md)"
 fi
 
 # 2. Library the manifest points at must exist (catches stale registrations).
@@ -49,22 +49,22 @@ fi
 # 3. Shaders the launchers will reference.
 SHADERS_OK=1
 for v in S M L Soft_S Soft_M Soft_L VL UL Soft_VL Soft_UL; do
-  if [ -f "$ANIME4K_SHADER_DIR/Anime4K_Restore_$v.fx" ]; then
+  if [ -f "$MIGAKI_SHADER_DIR/Anime4K_Restore_$v.fx" ]; then
     :
   else
-    bad "shader missing: $ANIME4K_SHADER_DIR/Anime4K_Restore_$v.fx"
+    bad "shader missing: $MIGAKI_SHADER_DIR/Anime4K_Restore_$v.fx"
     SHADERS_OK=0
   fi
 done
-[ "$SHADERS_OK" = "1" ] && ok "shaders (10 variants) in $ANIME4K_SHADER_DIR"
+[ "$SHADERS_OK" = "1" ] && ok "shaders (10 variants) in $MIGAKI_SHADER_DIR"
 
 # 3b. Clear presets (3D clarity): manifest + custom color shader + a render
 # smoke test of each chain (no game, nothing left behind).
 _PRESETS_OK=1
-_PJSON="$ANIME4K_ROOT/shaders/presets.json"
-[ -f "$_PJSON" ] || _PJSON="$ANIME4K_SHADER_DIR/presets.json"
+_PJSON="$MIGAKI_ROOT/shaders/presets.json"
+[ -f "$_PJSON" ] || _PJSON="$MIGAKI_SHADER_DIR/presets.json"
 if [ -f "$_PJSON" ]; then :; else bad "presets manifest missing (shaders/presets.json)"; _PRESETS_OK=0; fi
-if [ -f "$ANIME4K_SHADER_DIR/ClearColor.fx" ] || [ -f "$ANIME4K_ROOT/shaders/ClearColor.fx" ]; then :; else bad "ClearColor.fx missing (run install.sh)"; _PRESETS_OK=0; fi
+if [ -f "$MIGAKI_SHADER_DIR/ClearColor.fx" ] || [ -f "$MIGAKI_ROOT/shaders/ClearColor.fx" ]; then :; else bad "ClearColor.fx missing (run install.sh)"; _PRESETS_OK=0; fi
 _TMPCONF="$(mktemp 2>/dev/null || echo /tmp/a4k-preset.conf)"
 for _p in Clear Clear_Vivid Clear_AA; do
   if ! ak_is_preset "$_p"; then
@@ -72,7 +72,7 @@ for _p in Clear Clear_Vivid Clear_AA; do
     _PRESETS_OK=0
     continue
   fi
-  if ak_render_preset_conf "$_p" "$_TMPCONF" "$ANIME4K_SHADER_DIR" 2>/dev/null \
+  if ak_render_preset_conf "$_p" "$_TMPCONF" "$MIGAKI_SHADER_DIR" 2>/dev/null \
      && grep -q '^effects = ' "$_TMPCONF"; then
     :
   else
@@ -191,7 +191,7 @@ fi
 # set MUST be bridge-only: Textractor otherwise loads its six stock extensions
 # on a missing SavedExtensions.txt, stalling the pipeline (docs/translate.md).
 _TX="$(ak_config_get prefix "")"
-[ -n "$_TX" ] || _TX="$HOME/.local/share/anime4k/prefixes/default"
+[ -n "$_TX" ] || _TX="$HOME/.local/share/migaki/prefixes/default"
 _TX86="$_TX/drive_c/Textractor/x86"
 _CX86="$(ak_textractor_x86)"
 if [ -f "$_TX86/Textractor.exe" ]; then
@@ -269,7 +269,7 @@ else
       fi ;;
     *GNOME*)
       if command -v gnome-extensions >/dev/null 2>&1 \
-         && gnome-extensions list --enabled 2>/dev/null | grep -q 'vn-textbox-top@anime4k'; then
+         && gnome-extensions list --enabled 2>/dev/null | grep -q 'vn-textbox-top@migaki'; then
         ok "textbox Top: GNOME Shell extension enabled"
       else
         skip "textbox Top: GNOME Wayland needs the Shell extension (re-run install.sh)"
@@ -285,7 +285,7 @@ if [ -f "$_GUI" ] && python3 -c "import PySide6" 2>/dev/null; then
   if QT_QPA_PLATFORM=offscreen timeout 40 python3 "$_GUI" --self-test >/dev/null 2>&1; then
     ok "GUI loads (QML self-test)"
   else
-    bad "GUI self-test failed (run: anime4k-gui --diagnose; log: ~/.cache/anime4k/gui.log)"
+    bad "GUI self-test failed (run: migaki-gui --diagnose; log: ~/.cache/migaki/gui.log)"
   fi
 fi
 unset _GUI

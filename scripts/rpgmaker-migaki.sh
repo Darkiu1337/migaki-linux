@@ -1,7 +1,7 @@
 #!/bin/bash
-# rpgmaker-anime4k.sh — run RPGMaker games with Anime4K Restore (vkBasalt) where possible.
+# rpgmaker-migaki.sh — run RPGMaker games with Anime4K Restore (vkBasalt) where possible.
 #
-# Usage: rpgmaker-anime4k.sh [options] --gamepath DIR
+# Usage: rpgmaker-migaki.sh [options] --gamepath DIR
 #   With no --gamepath given, a folder picker opens.
 #
 # RPGMaker MV/MZ (Chromium-based) get the full treatment: the wrapper's NW.js
@@ -9,7 +9,7 @@
 # the game runs through X11 ozone on the selected GPU, and vkBasalt applies Restore.
 #
 # Other engines (XP/VX/VXAce, Tyrano, Godot, ...) cannot use this path
-# (no Chromium/Vulkan presentation). The script prints the proton-anime4k.sh
+# (no Chromium/Vulkan presentation). The script prints the proton-migaki.sh
 # equivalent (those titles usually run fine under Proton, where RGSS's D3D9
 # goes through DXVK and stays hookable) and launches unfiltered unless
 # --no-fallback is given.
@@ -25,14 +25,14 @@
 #   --no-fallback        for non-Chromium games: print guidance and exit 1
 #   --dry-run            print the resolved launch command and exit
 #   --help               this text
-# Toggle filter off: DISABLE_VKBASALT=1 rpgmaker-anime4k.sh ...
+# Toggle filter off: DISABLE_VKBASALT=1 rpgmaker-migaki.sh ...
 set -e
 _SRC="${BASH_SOURCE[0]}"
 while [ -L "$_SRC" ]; do _SRC="$(readlink "$_SRC")"; case "$_SRC" in /*) :;; *) _SRC="$(dirname "${BASH_SOURCE[0]}")/$_SRC";; esac; done
 SCRIPT_DIR="$(cd "$(dirname "$_SRC")" && pwd)"
 unset _SRC
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/anime4k-lib.sh"
+source "$SCRIPT_DIR/migaki-lib.sh"
 
 usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -87,7 +87,7 @@ if [ "$ENGINE" != "rpgmaker-mv" ]; then
   ak_log "(if you picked a www/ subfolder, try its parent folder instead.)"
   if [ -n "$EXE_CANDIDATE" ]; then
     ak_log "this title usually runs fine under Proton instead, try:"
-    ak_log "  proton-anime4k.sh \"$EXE_CANDIDATE\""
+    ak_log "  proton-migaki.sh \"$EXE_CANDIDATE\""
   fi
   if [ "$NOFALLBACK" = "1" ]; then
     exit 1

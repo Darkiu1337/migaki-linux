@@ -1,12 +1,12 @@
 #!/bin/bash
-# native-anime4k.sh — run native Linux games (e.g. Ren'Py) with Anime4K Restore.
+# native-migaki.sh — run native Linux games (e.g. Ren'Py) with Anime4K Restore.
 # Ren'Py and most native 2D titles render with OpenGL, which vkBasalt cannot
 # hook directly. This script routes GL through Zink (OpenGL-on-Vulkan) so the
 # game presents via a Vulkan swapchain that vkBasalt + Restore can process.
 #
-# Usage: native-anime4k.sh [options] <executable> [args...]
+# Usage: native-migaki.sh [options] <executable> [args...]
 #   With no executable given, a file picker opens (any file, not just .sh).
-#   Ren'Py example: native-anime4k.sh "/path/to/Game/Game.sh"
+#   Ren'Py example: native-migaki.sh "/path/to/Game/Game.sh"
 #
 # Options:
 #   --variant NAME                 Restore strength (S|M|L|Soft_S|Soft_M|Soft_L|VL|UL|Soft_VL|Soft_UL) or a
@@ -19,7 +19,7 @@
 #   --lang LOCALE        game locale, e.g. ja_JP.UTF-8 (empty = system default)
 #   --dry-run            print the resolved launch command and exit
 #   --help               this text
-# Toggle filter off: DISABLE_VKBASALT=1 native-anime4k.sh ...
+# Toggle filter off: DISABLE_VKBASALT=1 native-migaki.sh ...
 # 64-bit titles only (matches our vkBasalt build).
 set -e
 _SRC="${BASH_SOURCE[0]}"
@@ -27,7 +27,7 @@ while [ -L "$_SRC" ]; do _SRC="$(readlink "$_SRC")"; case "$_SRC" in /*) :;; *) 
 SCRIPT_DIR="$(cd "$(dirname "$_SRC")" && pwd)"
 unset _SRC
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/anime4k-lib.sh"
+source "$SCRIPT_DIR/migaki-lib.sh"
 
 usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
 

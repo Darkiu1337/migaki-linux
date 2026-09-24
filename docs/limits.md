@@ -59,7 +59,7 @@ loader default, an explicit name overrides). The rpgmaker/native runners
 take `--gpu nvidia|amd|auto`. (A missed filter on a 32-bit title is a
 WoW64-mode issue, not a GPU one — see the proton table above.)
 
-Run `anime4k doctor` on a new machine to verify the whole chain (manifest,
+Run `migaki doctor` on a new machine to verify the whole chain (manifest,
 library, shaders, GPU, runner backends, 32-bit/WoW64 posture, translation
 deps, KDE QML style, live vkcube run and a headless GUI self-test) without any
 game.
@@ -112,9 +112,9 @@ so they compose with translation exactly like Restore variants.
 SMAA (the only real cost risk at 1080p on a GTX 1650-class GPU — if it stutters,
 fall back to `Clear` or add an FXAA-based preset). These are **enhance at native
 resolution**, not upscalers. Add a preset by editing `shaders/presets.json`;
-`anime4k doctor` renders and verifies each chain.
+`migaki doctor` renders and verifies each chain.
 
-## Game detection (`anime4k detect <path>`)
+## Game detection (`migaki detect <path>`)
 
 Marker-based engine sniffing, shared by the TUI, GUI and the rpgmaker
 runner. High confidence auto-fills the runner (confirmed on save);
@@ -152,7 +152,7 @@ it is set, while `LANG` alone runs fine. So `ak_locale_env` checks
 locale is absent. The container's `pv-locale-gen` still generates the
 locale for the process, so text renders correctly either way; to silence the
 warning and take the `HOST_LC_ALL` path, add the locale to
-`/etc/locale.gen` and run `sudo locale-gen`. Set `ANIME4K_NO_HOST_LC_ALL=1`
+`/etc/locale.gen` and run `sudo locale-gen`. Set `MIGAKI_NO_HOST_LC_ALL=1`
 to never export `HOST_LC_ALL` (escape hatch if a title still dies with it).
 
 ## Interface notes
@@ -163,7 +163,7 @@ to never export `HOST_LC_ALL` (escape hatch if a title still dies with it).
   layers.) Proof: unfiltered logs contain zero vkBasalt lines.
 * **Game icons** (GUI): extracted from Windows `.exe` files (`icoextract`),
   RPGMaker manifest art or shipped icon files, cached under
-  `~/.cache/anime4k/icons/`. Missing sources fall back to a generic icon.
+  `~/.cache/migaki/icons/`. Missing sources fall back to a generic icon.
   Cached icons survive unplugged drives; delete the cache dir to refresh.
 * **File pickers**: the GUI prefers the desktop's native dialog (KDE
   `kdialog`, else `zenity`), falling back to Qt Quick Dialogs when neither is

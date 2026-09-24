@@ -1,9 +1,9 @@
 #!/bin/bash
-# proton-anime4k.sh — run any Windows game under Proton + Anime4K Restore (vkBasalt).
+# proton-migaki.sh — run any Windows game under Proton + Anime4K Restore (vkBasalt).
 # The filter engages for Vulkan-rendered games: DXVK (D3D9/10/11), VKD3D (D3D12),
 # native Vulkan. OpenGL/software titles launch fine but stay unfiltered.
 #
-# Usage: proton-anime4k.sh [options] <game.exe> [game args...]
+# Usage: proton-migaki.sh [options] <game.exe> [game args...]
 #   With no exe given, a file picker opens.
 #
 # Options:
@@ -11,7 +11,7 @@
 #                                        or a Clear 3D preset (Clear|Clear_Vivid|Clear_AA)
 #   --fps N|off          DXVK frame cap (default: 60; off disables)
 #   --prefix DIR         Wine prefix (default: shared project prefix, see --prefix-mode)
-#   --prefix-mode shared|game  shared ~/.local/share/anime4k/prefixes/default
+#   --prefix-mode shared|game  shared ~/.local/share/migaki/prefixes/default
 #                        versus per-game prefixes/<gameid> (default: shared)
 #   --proton NAME        Proton runner name/path; "umu" forces the umu-managed
 #                        UMU-Proton (default: config `proton`, else UMU-Proton)
@@ -28,14 +28,14 @@
 #   --hud                show MangoHud overlay (fps readout; frame cap stays DXVK)
 #   --dry-run            print the resolved launch command and exit
 #   --help               this text
-# Toggle filter off: DISABLE_VKBASALT=1 proton-anime4k.sh ...
+# Toggle filter off: DISABLE_VKBASALT=1 proton-migaki.sh ...
 set -e
 _SRC="${BASH_SOURCE[0]}"
 while [ -L "$_SRC" ]; do _SRC="$(readlink "$_SRC")"; case "$_SRC" in /*) :;; *) _SRC="$(dirname "${BASH_SOURCE[0]}")/$_SRC";; esac; done
 SCRIPT_DIR="$(cd "$(dirname "$_SRC")" && pwd)"
 unset _SRC
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/anime4k-lib.sh"
+source "$SCRIPT_DIR/migaki-lib.sh"
 
 usage() { sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; }
 
@@ -113,9 +113,9 @@ if [ -n "$PREFIX_FLAG" ]; then
 elif [ -n "$(ak_config_get prefix "")" ]; then
   PREFIX="$(ak_config_get prefix "")"
 elif [ "$PMODE" = "game" ]; then
-  PREFIX="$HOME/.local/share/anime4k/prefixes/$GAMEID"
+  PREFIX="$HOME/.local/share/migaki/prefixes/$GAMEID"
 elif [ "$PMODE" = "shared" ]; then
-  PREFIX="$HOME/.local/share/anime4k/prefixes/default"
+  PREFIX="$HOME/.local/share/migaki/prefixes/default"
 else
   ak_die "--prefix-mode needs shared or game"
 fi

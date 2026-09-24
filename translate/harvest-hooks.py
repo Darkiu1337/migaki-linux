@@ -8,7 +8,7 @@ translate.hook_code field, and (if present) the selected thread's identity
 into translate.thread. Closing the loop: nothing is ever hand-copied.
 
 Usage: harvest-hooks.py --exe /path/game.exe --game ID [--lib games.json]
-       [--prefix DIR]   (default: prefix from ~/.config/anime4k/config.json)
+       [--prefix DIR]   (default: prefix from ~/.config/migaki/config.json)
 Exit: 0 recorded something, 1 nothing to harvest (not an error for callers).
 """
 import argparse
@@ -29,19 +29,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--exe", required=True)
     ap.add_argument("--game", required=True)
-    ap.add_argument("--lib", default=os.path.expanduser("~/.config/anime4k/games.json"))
+    ap.add_argument("--lib", default=os.path.expanduser("~/.config/migaki/games.json"))
     ap.add_argument("--prefix", default="")
     args = ap.parse_args()
 
     prefix = args.prefix
     if not prefix:
         try:
-            with open(os.path.expanduser("~/.config/anime4k/config.json")) as f:
+            with open(os.path.expanduser("~/.config/migaki/config.json")) as f:
                 prefix = json.load(f).get("prefix", "")
         except (OSError, ValueError):
             prefix = ""
     if not prefix:
-        prefix = os.path.expanduser("~/.local/share/anime4k/prefixes/default")
+        prefix = os.path.expanduser("~/.local/share/migaki/prefixes/default")
 
     saved = os.path.join(prefix, "drive_c", "Textractor", "x86", "SavedHooks.txt")
     vexe = wine_path(args.exe, prefix)

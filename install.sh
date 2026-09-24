@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — the single installer for anime4k-restore-linux.
+# install.sh — the single installer for migaki-linux.
 #
 # One idempotent flow does everything: distro packages, vkBasalt, Proton,
 # RPGMaker support, shaders, translation (Textractor + DeepL), textbox Top and
@@ -51,11 +51,11 @@ HIDDEN_BRIDGE="stock"
 
 usage() {
   cat <<'EOF'
-install.sh — the single installer for anime4k-restore-linux.
+install.sh — the single installer for migaki-linux.
 
 One idempotent flow: distro packages, vkBasalt, Proton, RPGMaker support,
 shaders, VN translation, textbox Top and desktop entries. It never overwrites
-your config (~/.config/anime4k) or game library.
+your config (~/.config/migaki) or game library.
 
 Usage: ./install.sh [--check-only] [--dry-run] [--desktop] [--no-symlink] [-y]
   --check-only   audit only; exit 1 if a required tool is missing
@@ -87,7 +87,7 @@ while [ $# -gt 0 ]; do
 done
 
 # Test seam: point the distro detection at another os-release.
-OS_RELEASE="${ANIME4K_OS_RELEASE:-/etc/os-release}"
+OS_RELEASE="${MIGAKI_OS_RELEASE:-/etc/os-release}"
 
 # ===========================================================================
 # Prompts
@@ -124,7 +124,7 @@ confirm_no() { # default No
 # Config helpers
 # ===========================================================================
 config_set_key() {
-  python3 - "$HOME/.config/anime4k/config.json" "$1" "$2" <<'EOF'
+  python3 - "$HOME/.config/migaki/config.json" "$1" "$2" <<'EOF'
 import json, os, sys
 p, k, v = sys.argv[1], sys.argv[2], sys.argv[3]
 try:
@@ -417,7 +417,7 @@ install__fetch_vendor() {
   if [ "$bridge" = "fixed" ]; then
     local FIXED_SHA="acc84db3227dc833a4895b6242c1e3fb0353bd87a43a730a39a15d853006b114"
     local TAG="${TRANSLATE_RELEASE_TAG:-translate-v2}"
-    local FIXED_URL="https://github.com/Darkiu1337/anime4k-restore-linux/releases/download/${TAG}/textractor_websocket_x86.dll"
+    local FIXED_URL="https://github.com/Darkiu1337/migaki-linux/releases/download/${TAG}/textractor_websocket_x86.dll"
     if ! vendor_dl "$FIXED_URL" "$FIXED_SHA" "$vdir/textractor_websocket_x86.fixed.dll"; then
       warn "fixed bridge asset unavailable (release '${TAG}' not published?); using the stock bridge"
       note "publish the '${TAG}' release asset, or drop the DLL at $vdir/textractor_websocket_x86.fixed.dll"
@@ -457,13 +457,13 @@ install__provision_textractor() {
     esac
   done
   if [ -z "$prefix" ]; then
-    prefix="$(python3 -c "import json; print(json.load(open('$HOME/.config/anime4k/config.json')).get('prefix', ''))" 2>/dev/null || true)"
-    [ -n "$prefix" ] || prefix="$HOME/.local/share/anime4k/prefixes/default"
+    prefix="$(python3 -c "import json; print(json.load(open('$HOME/.config/migaki/config.json')).get('prefix', ''))" 2>/dev/null || true)"
+    [ -n "$prefix" ] || prefix="$HOME/.local/share/migaki/prefixes/default"
   fi
   local SRC="$vdir/textractor-full/x86"
   [ -d "$SRC" ] || { err "missing $SRC (vendor fetch needed)"; return 1; }
 
-  local HOME_DIR="${ANIME4K_TEXTTRACTOR_HOME:-$HOME/.local/share/anime4k/textractor}"
+  local HOME_DIR="${MIGAKI_TEXTTRACTOR_HOME:-$HOME/.local/share/migaki/textractor}"
   local DST="$HOME_DIR/x86"
   mkdir -p "$DST"
   cp -r "$SRC/." "$DST/"
@@ -866,8 +866,8 @@ step_vkbasalt_build() {
       unset vklib vkjson
       rm -rf "$vbdir"; trap - EXIT; unset vbdir
       mkdir -p "$HOME/.local/share/vkBasalt"
-      touch "$HOME/.local/share/vkBasalt/.anime4k-installed"
-      mkdir -p "$HOME/.config/anime4k"
+      touch "$HOME/.local/share/vkBasalt/.migaki-installed"
+      mkdir -p "$HOME/.config/migaki"
       config_set_key layer_dir "$HOME/.local/share/vulkan/implicit_layer.d"
       ok "vkbasalt built + installed to ~/.local (layer_dir recorded in config.json)"
     else
@@ -942,7 +942,7 @@ install_cachyos_proton() { # <dest-dir> <name>
 }
 
 seed_proton_default() { # <dest-dir>
-  python3 - "$HOME/.config/anime4k/config.json" "$1" <<'EOF'
+  python3 - "$HOME/.config/migaki/config.json" "$1" <<'EOF'
 import json, os, sys
 p, proton = sys.argv[1], sys.argv[2]
 if not proton or not os.path.isdir(proton):
@@ -1006,12 +1006,12 @@ step_shaders() {
 
 step_config() {
   step "Configuration"
-  mkdir -p "$HOME/.config/anime4k"
-  if [ ! -f "$HOME/.config/anime4k/config.json" ]; then
-    echo '{"_note":"optional overrides: prefix, proton, layer_dir, shader_dir, wow64"}' > "$HOME/.config/anime4k/config.json"
-    ok "seeded ~/.config/anime4k/config.json"
+  mkdir -p "$HOME/.config/migaki"
+  if [ ! -f "$HOME/.config/migaki/config.json" ]; then
+    echo '{"_note":"optional overrides: prefix, proton, layer_dir, shader_dir, wow64"}' > "$HOME/.config/migaki/config.json"
+    ok "seeded ~/.config/migaki/config.json"
   else
-    ok "kept existing ~/.config/anime4k/config.json"
+    ok "kept existing ~/.config/migaki/config.json"
   fi
 }
 
@@ -1086,49 +1086,84 @@ step_top() {
 }
 
 install_gnome_top_extension() {
-  local src="$ROOT/translate/gnome-extension/vn-textbox-top@anime4k"
-  local dst="$HOME/.local/share/gnome-shell/extensions/vn-textbox-top@anime4k"
+  local src="$ROOT/translate/gnome-extension/vn-textbox-top@migaki"
+  local dst="$HOME/.local/share/gnome-shell/extensions/vn-textbox-top@migaki"
   [ -d "$src" ] || return 0
   if ! command -v gnome-extensions >/dev/null 2>&1; then
     note "gnome-extensions CLI missing; textbox Top stays unsupported"
     return 0
   fi
   if [ "$CHECK_ONLY" = "1" ] || [ "$DRY_RUN" = "1" ]; then
-    note "would install GNOME Shell extension vn-textbox-top@anime4k"
+    note "would install GNOME Shell extension vn-textbox-top@migaki"
     return 0
   fi
   if ! confirm_no "install the GNOME Shell extension for textbox always-on-top? (may need re-login)"; then
     note "skipped; textbox Top stays unsupported on GNOME Wayland"
     return 0
   fi
+  # Remove the pre-rename extension (uuid changed with the project rename).
+  local old="$HOME/.local/share/gnome-shell/extensions/vn-textbox-top@anime4k"
+  if [ -d "$old" ]; then
+    gnome-extensions disable vn-textbox-top@anime4k 2>/dev/null || true
+    rm -rf "$old"
+  fi
   mkdir -p "$dst"
   cp -f "$src/metadata.json" "$src/extension.js" "$dst/" 2>/dev/null || true
-  if gnome-extensions enable vn-textbox-top@anime4k 2>/dev/null; then
-    ok "enabled vn-textbox-top@anime4k (log out/in if it does not activate)"
+  if gnome-extensions enable vn-textbox-top@migaki 2>/dev/null; then
+    ok "enabled vn-textbox-top@migaki (log out/in if it does not activate)"
   else
-    note "installed; enable it: gnome-extensions enable vn-textbox-top@anime4k"
+    note "installed; enable it: gnome-extensions enable vn-textbox-top@migaki"
   fi
+}
+
+step_migrate() {
+  # One-time move of pre-rename (anime4k) state to the migaki paths. Runs only
+  # when the old path exists and the new one does not, so it is safe to re-run.
+  if [ "$CHECK_ONLY" = "1" ] || [ "$DRY_RUN" = "1" ]; then
+    [ -d "$HOME/.config/anime4k" ] && \
+      note "would migrate ~/.config, ~/.cache, ~/.local/share from anime4k to migaki"
+    return 0
+  fi
+  local moved=0 pair old new
+  for pair in \
+    "$HOME/.config/anime4k:$HOME/.config/migaki" \
+    "$HOME/.cache/anime4k:$HOME/.cache/migaki" \
+    "$HOME/.local/share/anime4k:$HOME/.local/share/migaki"; do
+    old="${pair%%:*}"; new="${pair#*:}"
+    if [ -d "$old" ] && [ ! -e "$new" ]; then
+      mv "$old" "$new" && moved=1
+    fi
+  done
+  # vkBasalt source-build sentinel.
+  local sdir="$HOME/.local/share/vkBasalt"
+  if [ -f "$sdir/.anime4k-installed" ] && [ ! -f "$sdir/.migaki-installed" ]; then
+    mv "$sdir/.anime4k-installed" "$sdir/.migaki-installed" && moved=1
+  fi
+  [ "$moved" = "1" ] && ok "migrated anime4k config/cache/prefixes to migaki"
+  return 0
 }
 
 step_symlinks() {
   step "Command symlinks"
   [ "$SYMLINK" = "1" ] || { note "skipped (--no-symlink)"; return 0; }
   mkdir -p "$HOME/.local/bin"
+  # Pre-rename symlinks are replaced by the migaki ones below.
+  rm -f "$HOME/.local/bin/anime4k" "$HOME/.local/bin/anime4k-gui"
   # A moved/renamed checkout leaves dangling links (targets are absolute):
-  # report before repointing so a broken anime4k is never silent.
+  # report before repointing so a broken migaki is never silent.
   local l p
-  for l in anime4k anime4k-gui vn-launch vn-textbox vn-translate; do
+  for l in migaki migaki-gui vn-launch vn-textbox vn-translate; do
     p="$HOME/.local/bin/$l"
     if [ -L "$p" ] && [ ! -e "$p" ]; then
       note "$l was dangling (-> $(readlink "$p")); repointing to $ROOT"
     fi
   done
-  ln -sf "$ROOT/scripts/anime4k" "$HOME/.local/bin/anime4k"
+  ln -sf "$ROOT/scripts/migaki" "$HOME/.local/bin/migaki"
   if [ -f "$ROOT/gui/app.py" ]; then
-    ln -sf "$ROOT/gui/app.py" "$HOME/.local/bin/anime4k-gui"
-    ok "anime4k, anime4k-gui -> ~/.local/bin/"
+    ln -sf "$ROOT/gui/app.py" "$HOME/.local/bin/migaki-gui"
+    ok "migaki, migaki-gui -> ~/.local/bin/"
   else
-    ok "anime4k -> ~/.local/bin/ (gui not built yet)"
+    ok "migaki -> ~/.local/bin/ (gui not built yet)"
   fi
   if [ -d "$ROOT/translate" ]; then
     ln -sf "$ROOT/translate/vn-launch.sh" "$HOME/.local/bin/vn-launch"
@@ -1145,7 +1180,7 @@ step_symlinks() {
       for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
         if [ -f "$rc" ] && ! grep -q '\.local/bin' "$rc"; then
           if confirm "append ~/.local/bin to PATH in $rc?"; then
-            printf '\n# added by anime4k-restore-linux install.sh\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+            printf '\n# added by migaki-linux install.sh\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
             note "added (restart your shell to take effect)"
           fi
         fi
@@ -1157,37 +1192,45 @@ step_desktop_entries() {
   [ "$DESKTOP" = "1" ] || return 0
   step "Desktop entry"
   mkdir -p "$HOME/.local/share/applications"
+  # Drop the pre-rename entry + icon so nothing stale lingers.
+  rm -f "$HOME/.local/share/applications/anime4k.desktop" \
+        "$HOME/.local/share/applications/anime4k-gui.desktop" \
+        "$HOME/.local/share/pixmaps/anime4k.png" \
+        "$HOME/.local/share/icons/hicolor/scalable/apps/anime4k.svg"
+  for s in 16 24 32 48 64 128 256; do
+    rm -f "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/anime4k.png"
+  done
   if [ -f "$ROOT/gui/app.py" ]; then
-    cat > "$HOME/.local/share/applications/anime4k-gui.desktop" <<EOF2
+    cat > "$HOME/.local/share/applications/migaki-gui.desktop" <<EOF2
 [Desktop Entry]
-Name=Anime4K Launcher (GUI)
-Comment=Launch games with Anime4K Restore filters
+Name=Migaki (GUI)
+Comment=Launch games with real-time image restoration
 Exec=$ROOT/gui/app.py
-Icon=anime4k
+Icon=migaki
 Terminal=false
 Type=Application
 Categories=Game;
 StartupNotify=true
-StartupWMClass=anime4k-gui
+StartupWMClass=migaki-gui
 EOF2
   fi
 
   # App icon: deploy the generated hicolor set (plus a pixmaps fallback) so
-  # the entry above resolves Icon=anime4k. Skipped on checkouts that predate
+  # the entry above resolves Icon=migaki. Skipped on checkouts that predate
   # assets/icons/.
   if [ -d "$ROOT/assets/icons/png" ]; then
     for s in 16 24 32 48 64 128 256; do
-      src="$ROOT/assets/icons/png/anime4k-$s.png"
+      src="$ROOT/assets/icons/png/migaki-$s.png"
       [ -f "$src" ] || continue
       install -Dm644 "$src" \
-        "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/anime4k.png"
+        "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/migaki.png"
     done
-    [ -f "$ROOT/assets/icons/anime4k.svg" ] && \
-      install -Dm644 "$ROOT/assets/icons/anime4k.svg" \
-        "$HOME/.local/share/icons/hicolor/scalable/apps/anime4k.svg"
-    [ -f "$ROOT/assets/icons/png/anime4k-256.png" ] && \
-      install -Dm644 "$ROOT/assets/icons/png/anime4k-256.png" \
-        "$HOME/.local/share/pixmaps/anime4k.png"
+    [ -f "$ROOT/assets/icons/migaki.svg" ] && \
+      install -Dm644 "$ROOT/assets/icons/migaki.svg" \
+        "$HOME/.local/share/icons/hicolor/scalable/apps/migaki.svg"
+    [ -f "$ROOT/assets/icons/png/migaki-256.png" ] && \
+      install -Dm644 "$ROOT/assets/icons/png/migaki-256.png" \
+        "$HOME/.local/share/pixmaps/migaki.png"
   fi
 
   command -v update-desktop-database >/dev/null 2>&1 && \
@@ -1202,12 +1245,13 @@ EOF2
 # Main
 # ===========================================================================
 main() {
-  printf '\n%s%sAnime4K Restore%s %s— installer%s\n' \
+  printf '\n%s%sMigaki%s %s— installer%s\n' \
     "$C_BOLD" "$C_CYAN" "$C_RESET" "$C_DIM" "$C_RESET"
   [ "$CHECK_ONLY" = "1" ] && note "check-only mode (no changes)"
   [ "$DRY_RUN" = "1" ] && note "dry-run mode (no changes)"
   [ -z "$PM_NAME" ] && warn "unknown distro family — package steps will be manual"
 
+  step_migrate
   step_deps
   step_gui_deps
   step_umu
@@ -1236,9 +1280,9 @@ main() {
   step_desktop_entries
 
   printf '\n%s%s✓ Install complete%s\n' "$C_BOLD" "$C_GREEN" "$C_RESET"
-  printf '  Start the launcher:  %sanime4k%s      (TUI)\n' "$C_CYAN" "$C_RESET"
-  printf '  Graphical launcher:  %sanime4k-gui%s\n' "$C_CYAN" "$C_RESET"
-  printf '  Verify the chain:    %sanime4k doctor%s\n' "$C_CYAN" "$C_RESET"
+  printf '  Start the launcher:  %smigaki%s      (TUI)\n' "$C_CYAN" "$C_RESET"
+  printf '  Graphical launcher:  %smigaki-gui%s\n' "$C_CYAN" "$C_RESET"
+  printf '  Verify the chain:    %smigaki doctor%s\n' "$C_CYAN" "$C_RESET"
 }
 
 if [ "$MODE" != "install" ]; then

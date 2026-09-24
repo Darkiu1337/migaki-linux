@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""anime4k-gui — Qt Quick frontend for the Anime4K Restore launchers.
+"""migaki-gui — Qt Quick frontend for the Migaki launchers.
 
-Thin UI over the scripts/ runners; shares ~/.config/anime4k/games.json
-with the `anime4k` TUI. All launch/library/process logic lives in core/;
+Thin UI over the scripts/ runners; shares ~/.config/migaki/games.json
+with the `migaki` TUI. All launch/library/process logic lives in core/;
 this file is the QML bootstrap plus the QML-bound backend.
 """
 import json
@@ -102,7 +102,7 @@ def _capture_qt_messages(mode, context, message):
 
 
 def _log_path():
-    d = os.path.expanduser("~/.cache/anime4k")
+    d = os.path.expanduser("~/.cache/migaki")
     try:
         os.makedirs(d, exist_ok=True)
     except OSError:
@@ -1041,7 +1041,7 @@ def _diagnose(app, engine, model, backend):
         out = subprocess.run(["hyprctl", "clients", "-j"], capture_output=True,
                              text=True, timeout=5).stdout
         for c in json.loads(out):
-            if c.get("pid") == os.getpid() or "Anime4K" in (c.get("title") or ""):
+            if c.get("pid") == os.getpid() or "Migaki" in (c.get("title") or ""):
                 print("hypr client:", repr(c.get("title")), "at", c.get("at"),
                       "size", c.get("size"), "scale", c.get("scale"),
                       "floating", c.get("floating"))
@@ -1054,11 +1054,11 @@ def _diagnose(app, engine, model, backend):
 
 def main():
     app = QGuiApplication(sys.argv)
-    app.setApplicationName("Anime4K Launcher")
-    # Match the .desktop entry (Icon=anime4k) so the compositor shows our
+    app.setApplicationName("Migaki")
+    # Match the .desktop entry (Icon=migaki) so the compositor shows our
     # icon on the window/taskbar, and set it directly as a fallback.
-    app.setDesktopFileName("anime4k-gui")
-    _icon = os.path.join(REPO_ROOT, "assets", "icons", "png", "anime4k-256.png")
+    app.setDesktopFileName("migaki-gui")
+    _icon = os.path.join(REPO_ROOT, "assets", "icons", "png", "migaki-256.png")
     if os.path.isfile(_icon):
         app.setWindowIcon(QIcon(_icon))
     qInstallMessageHandler(_capture_qt_messages)
@@ -1108,7 +1108,7 @@ def main():
     if "--screenshot" in sys.argv[1:]:
         from PySide6.QtQuick import QQuickWindow
         idx = sys.argv.index("--screenshot")
-        out = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else "/tmp/anime4k-gui.png"
+        out = sys.argv[idx + 1] if idx + 1 < len(sys.argv) else "/tmp/migaki-gui.png"
         roots = engine.rootObjects()
         if roots:
             win = roots[0]

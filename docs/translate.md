@@ -7,7 +7,7 @@ Luna-style textbox — composed with the Restore filter in a single launch.
 ## Flow
 
 1. **Enable** per game: GUI game wizard/edit (Translation page) or
-   `anime4k edit` → `translate`. Proton/Windows games only.
+   `migaki edit` → `translate`. Proton/Windows games only.
 2. **First run (Setup Text Hooker for translation)**: this GUI button — or
    just pressing **Translate** when no hook is saved yet, which auto-runs
    Setup — launches the game and opens the Text Hooker picker. **Textractor
@@ -44,7 +44,7 @@ selection) on `:6677`; native code filters by thread, translates via Brave CDP
 DeepL and displays.
 
 Filter + translation compose: `vn-launch.sh --filter <variant>` applies the
-same vkBasalt mechanism as `proton-anime4k.sh`. A/B unfiltered launches stay
+same vkBasalt mechanism as `proton-migaki.sh`. A/B unfiltered launches stay
 untranslated by design.
 
 ## Thread picking without Textractor
@@ -198,7 +198,7 @@ and the real browser profile is never read or modified.
   * **KDE Plasma (Wayland)** — a small KWin script sets the documented
     `Window.keepAbove` property. It is loaded/unloaded over the
     `org.kde.KWin /Scripting` D-Bus interface and lives in
-    `~/.cache/anime4k/kwin-vn-textbox.js`; no user config is touched.
+    `~/.cache/migaki/kwin-vn-textbox.js`; no user config is touched.
   * **GNOME (Wayland)** — no client API exists. A bundled GNOME Shell
     extension (only if installed/enabled by `install.sh`) reads a state file
     and calls `Meta.Window.make_above()`. Without the extension, Top reports
@@ -233,7 +233,7 @@ Concretely, these are forbidden (and the self-test asserts they never appear):
   re-creates it — a focus-steal vector); flags are set once on Wayland.
 
 `translate/placement.py` allow-lists only stacking verbs and drops anything
-else; every command is appended to `~/.cache/anime4k/textbox.log` for
+else; every command is appended to `~/.cache/migaki/textbox.log` for
 diagnosis.
 
 ### Picking a hook without restarting (live)
@@ -276,7 +276,7 @@ bottom and scrolls when you scroll up.
 `install.sh` offers translation support (default Yes): fetches the pinned
 Textractor bundle + bridge (fixed v2 asset preferred, stock fallback),
 provisions Textractor **once per machine** under
-`~/.local/share/anime4k/textractor` (applying the bundled
+`~/.local/share/migaki/textractor` (applying the bundled
 `translate/textractor-config/` config), symlinks each Wine prefix's
 `drive_c/Textractor` to it, and symlinks `vn-launch` / `vn-textbox` /
 `vn-translate` into `~/.local/bin`. `vn-launch.sh` re-provisions/links on
@@ -286,7 +286,7 @@ Settings come from `translate/config.json` and the games registry from
 `translate/translate.json` — both seeded from their `.sample` files on
 first install (never overwritten); the Python entry points also start on a
 bare clone by falling back to the samples/builtins. `vn-launch.sh` resolves the shared
-`~/.config/anime4k/config.json` `proton` value the same way as the filter
+`~/.config/migaki/config.json` `proton` value the same way as the filter
 runner: an absolute path (or a bare name looked up under
 `compatibilitytools.d`); otherwise it falls back to the umu-managed
 UMU-Proton. `requirements.md` lists every dependency per
@@ -295,9 +295,9 @@ distro. `install.sh --check-only` audits the translate deps too.
 `install.sh` also detects the session for the textbox **Top** support: X11 is
 native, Hyprland needs `hyprctl`, KDE needs `qdbus6` (both normally present),
 and on GNOME Wayland it offers to deploy+enable the bundled Shell extension
-`vn-textbox-top@anime4k` under
+`vn-textbox-top@migaki` under
 `~/.local/share/gnome-shell/extensions/` (a re-login may be required on
-Wayland). Sway/unknown Wayland is reported unsupported. `anime4k doctor` prints
+Wayland). Sway/unknown Wayland is reported unsupported. `migaki doctor` prints
 the detected backend.
 
 ## Limits

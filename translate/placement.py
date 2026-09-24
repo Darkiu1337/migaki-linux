@@ -31,11 +31,11 @@ import subprocess
 import time
 
 TITLE = "vn-translate"
-CACHE_DIR = os.path.expanduser("~/.cache/anime4k")
+CACHE_DIR = os.path.expanduser("~/.cache/migaki")
 KWIN_SCRIPT = os.path.join(CACHE_DIR, "kwin-vn-textbox.js")
-KWIN_PLUGIN = "anime4k-vn-textbox"
+KWIN_PLUGIN = "migaki-vn-textbox"
 GNOME_STATE = os.path.join(CACHE_DIR, "gnome-vn-textbox-top")
-GNOME_EXT_UUID = "vn-textbox-top@anime4k"
+GNOME_EXT_UUID = "vn-textbox-top@migaki"
 
 
 def _run(argv, timeout=5):
@@ -185,7 +185,7 @@ class HyprlandPlacement(Placement):
         lua = ("pcall(function() if _G.__a4k_tb_rule then "
                "_G.__a4k_tb_rule:set_enabled(false) end end) "
                "_G.__a4k_tb_rule = hl.window_rule({ "
-               f'name="anime4k-vn-textbox", match={{ title="^{TITLE}$" }}, '
+               f'name="migaki-vn-textbox", match={{ title="^{TITLE}$" }}, '
                f"float=true, persistent_size=true{move} }})")
         self._eval(lua)
 
@@ -359,7 +359,7 @@ class KdePlacement(Placement):
     # Pure so it can be asserted in the self-test. NEVER add focus/activate/
     # move/warp calls here.
     TEMPLATE = (
-        "// anime4k vn-textbox: stacking-only keep-above.\n"
+        "// migaki vn-textbox: stacking-only keep-above.\n"
         "// NEVER focus/activate/move/warp (see docs/translate.md).\n"
         "function _a4kApply(w) {{\n"
         "    if (w && w.caption === \"{title}\") w.keepAbove = {value};\n"

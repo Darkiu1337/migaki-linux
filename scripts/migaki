@@ -1,23 +1,23 @@
 #!/bin/bash
-# anime4k — TUI front-end for the Anime4K Restore launchers (gum-based,
+# migaki — TUI front-end for the Migaki launchers (gum-based,
 # matching the Omarchy terminal aesthetic).
 #
-# Usage: anime4k [launch <name> | add | detect <path> | doctor | list | remove <name> | edit <name> | help]
+# Usage: migaki [launch <name> | add | detect <path> | doctor | list | remove <name> | edit <name> | help]
 #   No arguments opens the interactive menu.
-# Game library lives in ~/.config/anime4k/games.json
+# Game library lives in ~/.config/migaki/games.json
 set -e
 _SRC="${BASH_SOURCE[0]}"
 while [ -L "$_SRC" ]; do _SRC="$(readlink "$_SRC")"; case "$_SRC" in /*) :;; *) _SRC="$(dirname "${BASH_SOURCE[0]}")/$_SRC";; esac; done
 SCRIPT_DIR="$(cd "$(dirname "$_SRC")" && pwd)"
 unset _SRC
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/anime4k-lib.sh"
-LIB="$HOME/.config/anime4k/games.json"
-ANIME4K_REPO="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/migaki-lib.sh"
+LIB="$HOME/.config/migaki/games.json"
+MIGAKI_REPO="$(dirname "$SCRIPT_DIR")"
 
 # Write/launch paths run through the shared core (one store, backups,
 # validation) — see core/__main__.py.
-core_cmd() { env PYTHONPATH="$ANIME4K_REPO" python3 -m core "$@"; }
+core_cmd() { env PYTHONPATH="$MIGAKI_REPO" python3 -m core "$@"; }
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "error: '$1' not found" >&2; exit 1; }; }
 need gum
@@ -150,7 +150,7 @@ cmd_add() {
 cmd_list() {
   local n
   n="$(jq '.games | length' "$LIB")"
-  [ "$n" -gt 0 ] || { echo "library is empty — run: anime4k add"; exit 0; }
+  [ "$n" -gt 0 ] || { echo "library is empty — run: migaki add"; exit 0; }
   lib_names
 }
 
@@ -165,7 +165,7 @@ cmd_launch() {
   local id="${1:-}"
   [ -n "$id" ] || id="$(pick_game)"
   jq -e ".games[\"$id\"]" "$LIB" >/dev/null || { echo "error: unknown game id '$id'" >&2; exit 1; }
-  exec env PYTHONPATH="$ANIME4K_REPO" python3 -m core launch "$id"
+  exec env PYTHONPATH="$MIGAKI_REPO" python3 -m core launch "$id"
 }
 
 cmd_remove() {
@@ -238,11 +238,11 @@ cmd_edit() {
 cmd_menu() {
   while true; do
     local action
-    action="$(gum choose --header "Anime4K launcher" "Launch" "Add game" "Manage games" "Doctor" "Quit")"
+    action="$(gum choose --header "Migaki launcher" "Launch" "Add game" "Manage games" "Doctor" "Quit")"
     case "$action" in
       Launch) cmd_launch ;;
       "Add game") cmd_add ;;
-      Doctor) "$SCRIPT_DIR/anime4k-doctor.sh" || read -r -p "press Enter..." _ ;;
+      Doctor) "$SCRIPT_DIR/migaki-doctor.sh" || read -r -p "press Enter..." _ ;;
       "Manage games")
         local sub
         sub="$(gum choose --header "Manage" "List" "Edit" "Remove" "Back")"
@@ -258,7 +258,7 @@ cmd_menu() {
 }
 
 cmd_detect() {
-  [ -n "${1:-}" ] || { echo "usage: anime4k detect <path>" >&2; exit 1; }
+  [ -n "${1:-}" ] || { echo "usage: migaki detect <path>" >&2; exit 1; }
   local out eng runner conf root detail
   out="$(ak_detect_engine "$1")"
   eng="${out%%|*}"; out="${out#*|}"
@@ -273,8 +273,8 @@ cmd_detect() {
 }
 
 usage() {
-  echo "anime4k — Anime4K Restore game launcher"
-  echo "Usage: anime4k [launch <id> | add | detect <path> | doctor | list | remove [id] | edit [id] | help]"
+  echo "Migaki — game launcher with Anime4K Restore filters"
+  echo "Usage: migaki [launch <id> | add | detect <path> | doctor | list | remove [id] | edit [id] | help]"
   echo "  No arguments opens the interactive menu."
 }
 
@@ -283,11 +283,11 @@ case "${1:-menu}" in
   launch) shift; cmd_launch "${1:-}" ;;
   add) cmd_add ;;
   detect) shift; cmd_detect "${1:-}" ;;
-  doctor) shift; exec "$SCRIPT_DIR/anime4k-doctor.sh" "$@" ;;
+  doctor) shift; exec "$SCRIPT_DIR/migaki-doctor.sh" "$@" ;;
   list) cmd_list ;;
   remove) shift; cmd_remove "${1:-}" ;;
   edit) shift; cmd_edit "${1:-}" ;;
   help|--help|-h) usage ;;
   menu) cmd_menu ;;
-  *) echo "error: unknown command '$1' (see: anime4k help)" >&2; exit 1 ;;
+  *) echo "error: unknown command '$1' (see: migaki help)" >&2; exit 1 ;;
 esac

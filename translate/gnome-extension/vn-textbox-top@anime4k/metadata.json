@@ -1,7 +1,0 @@
-{
-  "uuid": "vn-textbox-top@anime4k",
-  "name": "vn-textbox Top",
-  "description": "Keeps the anime4k vn-translate textbox above other windows. Changes stacking order only: it never focuses/activates a window and never touches the pointer. Managed by anime4k-restore-linux (install.sh).",
-  "shell-version": ["45", "46", "47", "48", "49", "50", "51", "52"],
-  "version": 1
-}

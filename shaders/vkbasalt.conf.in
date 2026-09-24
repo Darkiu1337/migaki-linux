@@ -1,9 +1,9 @@
 # vkBasalt config template for Anime4K Restore.
 # Rendered per-run by the launchers (@SHADER_DIR@ and @VARIANT@ substituted).
-# Do not edit the rendered copies in ~/.config/anime4k/; edit this file.
-effects = anime4k_restore
+# Do not edit the rendered copies in ~/.config/migaki/; edit this file.
+effects = migaki_restore
 
-anime4k_restore = @SHADER_DIR@/Anime4K_Restore_@VARIANT@.fx
+migaki_restore = @SHADER_DIR@/Anime4K_Restore_@VARIANT@.fx
 reshadeTexturePath = @SHADER_DIR@
 reshadeIncludePath = @SHADER_DIR@
 depthCapture = off

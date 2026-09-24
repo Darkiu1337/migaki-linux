@@ -1,0 +1,7 @@
+{
+  "uuid": "vn-textbox-top@migaki",
+  "name": "vn-textbox Top",
+  "description": "Keeps the migaki vn-translate textbox above other windows. Changes stacking order only: it never focuses/activates a window and never touches the pointer. Managed by migaki-linux (install.sh).",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51", "52"],
+  "version": 1
+}

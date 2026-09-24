@@ -114,7 +114,7 @@ def gpu_fingerprint():
 
 
 def gpu_cache(ttl=GPU_CACHE_TTL, fingerprint=None):
-    """(gpus, stale) from ~/.cache/anime4k/gpus.json. gpus is None when the
+    """(gpus, stale) from ~/.cache/migaki/gpus.json. gpus is None when the
     cache is missing/malformed; stale also when the fingerprint differs or
     the entry is older than ttl. Never calls vulkaninfo."""
     try:
@@ -212,9 +212,9 @@ def list_protons():
 
 def detect(path):
     """Engine detection; wraps the proven bash implementation in
-    scripts/anime4k-lib.sh. Returns (engine, runner, confidence, root, detail)
+    scripts/migaki-lib.sh. Returns (engine, runner, confidence, root, detail)
     or None when detection fails to run/returns garbage."""
-    lib = os.path.join(paths.SCRIPTS_DIR, "anime4k-lib.sh")
+    lib = os.path.join(paths.SCRIPTS_DIR, "migaki-lib.sh")
     try:
         out = subprocess.run(
             ["bash", "-c", f'source "{lib}" && ak_detect_engine "$0"', path],
