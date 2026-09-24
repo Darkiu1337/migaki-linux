@@ -1053,6 +1053,9 @@ def _diagnose(app, engine, model, backend):
 
 
 def main():
+    # Ensure user-installed tools (~/.local/bin) resolve for every child we
+    # spawn, even when launched from a desktop session without that on PATH.
+    os.environ["PATH"] = paths.tool_path()
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Migaki")
     # Match the .desktop entry (Icon=migaki) so the compositor shows our

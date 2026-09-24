@@ -12,6 +12,14 @@ _MIGAKI_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGAKI_ROOT="$(cd "$_MIGAKI_LIB_DIR/.." && pwd)"
 unset _MIGAKI_LIB_DIR
 
+# Desktop-launched sessions often omit ~/.local/bin from PATH; user tools
+# installed there (rpgmaker-linux, …) must still resolve when a runner is
+# spawned from the GUI rather than a login shell.
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
 # User config (~/.config/migaki/config.json, optional). Keys: prefix, proton,
 # layer_dir, shader_dir, wow64. Missing file/keys fall back to builtins below.
 MIGAKI_CONFIG="$HOME/.config/migaki/config.json"

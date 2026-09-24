@@ -47,3 +47,18 @@ VKBASALT_ENV_VARS = ("VK_ADD_LAYER_PATH", "VK_INSTANCE_LAYERS",
                      "ENABLE_VKBASALT", "VKBASALT_CONFIG_FILE")
 
 TEXTBOX_PROG = "textbox.py"
+
+
+def tool_path(current=None):
+    """PATH with ~/.local/bin ensured.
+
+    A GUI launched from the desktop inherits a session PATH that often omits
+    ~/.local/bin, so user-installed tools (rpgmaker-linux, …) would not
+    resolve in the runners it spawns. Prepends the dir only when missing, so a
+    good PATH is left untouched."""
+    local_bin = os.path.expanduser("~/.local/bin")
+    path = os.environ.get("PATH", "") if current is None else current
+    parts = [p for p in path.split(os.pathsep) if p]
+    if local_bin not in parts:
+        parts.insert(0, local_bin)
+    return os.pathsep.join(parts)
