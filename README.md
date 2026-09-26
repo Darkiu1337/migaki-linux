@@ -90,7 +90,9 @@ that is the whole effect. Nothing is upscaled; resolution never changes.
   follows the saved thread live — no restart). The textbox Top works on
   Hyprland, KDE, X11 and (via a bundled Shell extension) GNOME, always by
   changing stacking only — it never focuses a window or moves the pointer.
-  Details: `docs/translate.md`.
+  An auto-built **name glossary** keeps character names consistent (harvesting
+  the furigana readings the game emits), and optional **context injection**
+  resolves pronouns across lines. Details: `docs/translate.md`.
 
 ## Use cases
 

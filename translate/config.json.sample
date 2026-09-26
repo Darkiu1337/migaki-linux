@@ -8,5 +8,6 @@
   "srclang": "ja",
   "tgtlang": "en",
   "cdp_timeout": 30,
-  "browser_hidden": true
+  "browser_hidden": true,
+  "context_lines": 6
 }

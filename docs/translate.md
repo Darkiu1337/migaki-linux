@@ -41,7 +41,9 @@ launcher from the game entry (recorded hook auto-inserts; user-saved lines
 always win). The v2 bridge streams **every** thread tagged with its
 identity (`~#<num>[*]~<addr>~<name>~<text>`, `*` = Textractor's own
 selection) on `:6677`; native code filters by thread, translates via Brave CDP
-DeepL and displays.
+DeepL and displays. Before translation each line passes through an auto-built
+**name glossary**, and DeepL may be fed **context** (previous lines) — see
+"Translation quality" below.
 
 Filter + translation compose: `vn-launch.sh --filter <variant>` applies the
 same vkBasalt mechanism as `proton-migaki.sh`. A/B unfiltered launches stay
@@ -160,6 +162,33 @@ Both the purge and the close are guarded to the isolated automation profile:
 a browser that wasn't started with that `--user-data-dir` is never touched,
 and the real browser profile is never read or modified.
 
+## Translation quality: name glossary + context
+
+Sentence-level MT gets two things wrong that the game itself can fix: **names**
+and **who is who**.
+
+**Name glossary** (`translate/names.py`). Many engines emit a furigana reading
+line right after a name is introduced (「小花衣凛桜」 then 「こはないりお」 →
+*Kohanai Rio*). The pipeline harvests those readings, `名前「…」` speaker tags
+and ruby patterns, and pins one English rendering per Japanese name. Names with
+no reading are *learned* from the engine's own first rendering (彰之 →
+"Akiyuki"). Known names are masked with private-use sentinels before DeepL and
+restored after, so they stop drifting — "Rinoh" / "Rinohara" / "Rin Sakura" all
+become "Rio". Reading lines are consumed for the glossary and never sent to
+DeepL (they made it hallucinate). The glossary is per game, auto-built and
+editable at `~/.config/migaki/glossary/<game>.json`.
+
+**Context** (`context_lines`, default 6). The previous N lines are prepended to
+the DeepL input and only the last output line is kept. This fixes discourse a
+single sentence cannot resolve (who "she" is, よろしく, 彼女が欲しかった). It
+costs latency (~2–4 s/line vs ~1 s) and **characters**: each line sends roughly
+(N+1)× the text, which counts against DeepL's allowance. Set `context_lines` to
+0 to disable it.
+
+Both levers are independent and model-agnostic: the glossary fixes names, the
+context fixes discourse. `translate/clean.py` adds optional pre-translation
+hygiene (punctuation, zero-width/control characters, ruby).
+
 ## Textbox window behavior (Float + Click + Top)
 
 * **Click** = click-through. Clicks on the text area fall through to the game
@@ -170,9 +199,11 @@ and the real browser profile is never read or modified.
   update. Both facts verified at the Wayland protocol level.)
 * **Float** is enforced unconditionally (an overlay must never tile). Before
   the window maps, `translate/placement.py` installs a Hyprland float rule
-  (`hyprctl eval`, title `^vn-translate$`: `float`, `persistent_size`, and the
-  saved position) so the first map is already floating at the last geometry —
-  no tiled flash. A ~1s poller still re-floats it if something tiles it later,
+  (`hyprctl eval`, title `^vn-translate$`: `float`, `persistent_size`,
+  `no_blur`, and the saved position) so the first map is already floating at
+  the last geometry — no tiled flash. `no_blur` opts the overlay out of
+  Hyprland's global backdrop blur, which would otherwise frost the
+  translucent panel. A ~1s poller still re-floats it if something tiles it later,
   independent of Top. No config change needed (Hyprland ≥ 0.55).
 * **Geometry is compositor-agnostic.** The QML window starts hidden, so
   `restore_state()` runs before the first map and Qt's `saveGeometry` /
@@ -308,7 +339,14 @@ the detected backend.
   advance the game while it listens (it keeps listening until you pick or
   cancel). Thread picking by name needs the v2 bridge — stock installs follow
   Textractor's selection instead.
-* Sentence-MT quirks: speaker names romanize inconsistently across lines.
+* **DeepL's free web translator has a 30-day character cap.** Heavy automated
+  use — or context injection, which sends ~7× the text — can hit it, after
+  which the web translator is blocked until it resets. Context is the expensive
+  part; the name glossary is roughly free (a name becomes one character).
+* **A Cloudflare challenge can stall requests** (uniform ~10–30 s lines, or
+  "DeepL source editor never appeared"). Running the automation browser
+  **visible** (`browser_hidden: false`, or the per-game "Show the DeepL browser
+  window" checkbox) clears it — a real window passes, headless does not.
 * DeepL runs only through the isolated browser (CDP); a browser failure
   reports a short "DeepL unavailable — retrying" line.
 * **Clean up after tests.** A session that isn't stopped cleanly leaves

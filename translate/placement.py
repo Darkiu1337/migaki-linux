@@ -186,7 +186,7 @@ class HyprlandPlacement(Placement):
                "_G.__a4k_tb_rule:set_enabled(false) end end) "
                "_G.__a4k_tb_rule = hl.window_rule({ "
                f'name="migaki-vn-textbox", match={{ title="^{TITLE}$" }}, '
-               f"float=true, persistent_size=true{move} }})")
+               f"float=true, persistent_size=true, no_blur=true{move} }})")
         self._eval(lua)
 
     def capture(self, pid):

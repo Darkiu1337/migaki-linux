@@ -35,6 +35,9 @@ DEFAULTS = {
     "tgtlang": "en",
     "cdp_timeout": 30,
     "browser_hidden": True,
+    # Previous lines prepended to the DeepL input (0 = off). Fixes discourse
+    # errors (who "she" is) at the cost of a little latency.
+    "context_lines": 6,
 }
 
 

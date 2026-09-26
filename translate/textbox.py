@@ -120,6 +120,7 @@ class Backend(QObject):
         self.pending = deque()
         self.ja_queue = deque()
         self.translator = None
+        self.glossary = None
         self.last_ja = ""
         self._show_ja = True
         self._keepontop = True
@@ -675,7 +676,16 @@ class Backend(QObject):
             return
         try:
             import vn_translate
-            self.translator = vn_translate.make_translator(True)
+            # Auto name glossary (per game): keeps names consistent and lets
+            # the furigana reading lines resolve them (凛桜 -> Rio).
+            save = None
+            if self.gameid:
+                from names import NameGlossary, glossary_path
+                path = glossary_path(self.gameid)
+                self.glossary = NameGlossary().load(path)
+                save = lambda: self.glossary.save(path)
+            self.translator = vn_translate.make_translator(
+                True, glossary=self.glossary, save=save)
         except Exception as e:
             self._status_text = f"translator init failed: {e}"
             self.statusTextChanged.emit()
@@ -710,6 +720,8 @@ class Backend(QObject):
                 out, via = self.translator(ja)
             except Exception as e:
                 out, via = f"[translation failed: {e}]", "none"
+            if via == "skip":
+                continue  # furigana reading line: consumed, not shown
             self.pending.append((ja, out))
 
     def drain(self):

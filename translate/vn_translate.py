@@ -8,7 +8,9 @@ Usage:
   echo "おはよう" | vn_translate.py --print-only   # headless check, no hook needed
 """
 import os
+import re
 import sys
+from collections import deque
 
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
@@ -23,7 +25,16 @@ except Exception:
     pass
 
 
-def make_translator(use_cdp=True):
+def make_translator(use_cdp=True, glossary=None, save=None, context_lines=None):
+    """Return tr(text) -> (out, via). Two free DeepL levers, both optional:
+
+    * NameGlossary: every line is fed to it and known names are masked/unmasked
+      around the DeepL call, so they stay consistent (凛桜 -> Rio, not "Rinoh").
+      Furigana reading lines are consumed and signalled via="skip".
+    * Context: the previous `context_lines` lines are prepended to the DeepL
+      input and the last output line is kept — this fixes discourse errors
+      (who "she" is, よろしく) at the cost of a little latency.
+    """
     cdp = None
     if use_cdp:
         try:
@@ -33,10 +44,47 @@ def make_translator(use_cdp=True):
         except Exception as e:
             print(f"translate: CDP unavailable ({e})", flush=True)
 
+    n_ctx = CONFIG.get("context_lines", 0) if context_lines is None \
+        else context_lines
+    ctx = deque(maxlen=max(0, int(n_ctx)))
+    state = {"prev": ""}
+
     def tr(text):
+        masked, mapping = text, {}
+        if glossary is not None:
+            import names
+            prev = state["prev"]
+            before = len(glossary.entries)
+            glossary.observe(text, prev)
+            state["prev"] = text
+            if len(glossary.entries) != before and save:
+                save()
+            if names.is_reading_line(text, prev):
+                return None, "skip"
+            masked, mapping = glossary.mask(text)
         if cdp is not None:
             try:
-                return cdp.translate(text), "cdp"
+                if ctx:
+                    raw = cdp.translate("\n".join(list(ctx) + [masked]))
+                    parts = [ln for ln in raw.splitlines() if ln.strip()]
+                    out = parts[-1] if parts else raw
+                else:
+                    out = cdp.translate(masked)
+                if glossary is not None:
+                    if mapping:
+                        out = glossary.unmask(out, mapping)
+                    # A name with no reading line gets pinned from the engine's
+                    # own first rendering (彰之 -> "Akiyuki: ...").
+                    spk = names.find_speaker(text)
+                    if spk and spk not in glossary.entries:
+                        head = re.match(
+                            r"^\s*([A-Za-z][A-Za-z'\-\. ]{0,24}?)\s*[:：]", out)
+                        if head:
+                            glossary.lock_rendering(spk, head.group(1).strip())
+                            if save:
+                                save()
+                ctx.append(masked)
+                return out, "cdp"
             except Exception as e:
                 print(f"translate: CDP failed ({e})", flush=True)
         return "[DeepL unavailable — retrying]", "none"
