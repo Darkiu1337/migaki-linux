@@ -408,10 +408,10 @@ install__fetch_vendor() {
       return 1
     fi
   fi
+  # Both bridges: the game's bitness picks which one the session loads
+  # (ak_pe_arch), so a 64-bit title needs the x64 build present.
   vendor_dl "$WS86_URL" "$WS86_SHA" "$vdir/textractor_websocket_x86.zip" || return 1
-  if [ "$all" = "1" ]; then
-    vendor_dl "$WS64_URL" "$WS64_SHA" "$vdir/textractor_websocket_x64.zip" || return 1
-  fi
+  vendor_dl "$WS64_URL" "$WS64_SHA" "$vdir/textractor_websocket_x64.zip" || return 1
 
   # Hardened bridge v2 (thread-tagged broadcast, needed by the in-app picker).
   if [ "$bridge" = "fixed" ]; then
@@ -421,6 +421,12 @@ install__fetch_vendor() {
     if ! vendor_dl "$FIXED_URL" "$FIXED_SHA" "$vdir/textractor_websocket_x86.fixed.dll"; then
       warn "fixed bridge asset unavailable (release '${TAG}' not published?); using the stock bridge"
       note "publish the '${TAG}' release asset, or drop the DLL at $vdir/textractor_websocket_x86.fixed.dll"
+    fi
+    # x64 fork asset is optional/unpublished so far: best-effort, fall back to
+    # the stock x64 bridge (loses the tagged picker on 64-bit titles).
+    local FIXED64_URL="https://github.com/Darkiu1337/migaki-linux/releases/download/${TAG}/textractor_websocket_x64.dll"
+    if ! vendor_dl "$FIXED64_URL" "" "$vdir/textractor_websocket_x64.fixed.dll"; then
+      note "no x64 fixed bridge asset; 64-bit titles use the stock x64 bridge"
     fi
   fi
 
@@ -445,13 +451,15 @@ PYEOF
 }
 
 install__provision_textractor() {
-  # Provision Textractor x86 once per machine and link it into a Wine prefix.
+  # Provision Textractor for both architectures once per machine and link the
+  # canonical dir into a Wine prefix. ak_pe_arch picks the build at launch
+  # (x86 for 32-bit PE, x64 for 64-bit PE); a missing build self-heals here.
   local prefix="" bridge="stock" vdir="$VENDOR_DIR_DEFAULT" link=1
   while [ $# -gt 0 ]; do
     case "$1" in
-      --prefix) prefix="${2:?--prefix needs a path}"; shift 2 ;;
-      --bridge) bridge="${2:?--bridge needs stock|fixed}"; shift 2 ;;
-      --vendor-dir) vdir="${2:?--vendor-dir needs a path}"; shift 2 ;;
+      --prefix) prefix="${2:-}"; shift 2 ;;
+      --bridge) bridge="${2:-stock}"; shift 2 ;;
+      --vendor-dir) vdir="${2:-$VENDOR_DIR_DEFAULT}"; shift 2 ;;
       --no-link) link=0; shift ;;
       *) err "provision-textractor: unknown option $1"; return 2 ;;
     esac
@@ -460,55 +468,66 @@ install__provision_textractor() {
     prefix="$(python3 -c "import json; print(json.load(open('$HOME/.config/migaki/config.json')).get('prefix', ''))" 2>/dev/null || true)"
     [ -n "$prefix" ] || prefix="$HOME/.local/share/migaki/prefixes/default"
   fi
-  local SRC="$vdir/textractor-full/x86"
-  [ -d "$SRC" ] || { err "missing $SRC (vendor fetch needed)"; return 1; }
 
   local HOME_DIR="${MIGAKI_TEXTTRACTOR_HOME:-$HOME/.local/share/migaki/textractor}"
-  local DST="$HOME_DIR/x86"
-  mkdir -p "$DST"
-  cp -r "$SRC/." "$DST/"
-  cp -f "$SRC/Textractor.exe" "$SRC/TextractorCLI.exe" "$SRC/texthook.dll" "$DST/"
-
-  # Textractor loads the REGISTERED copy (*.xdll), not the *.dll: both
-  # filenames must carry the same build or sessions silently run the other one.
-  local FIXED="" cand
-  for cand in "$vdir/textractor_websocket_x86.fixed.dll" "$vdir/bridge-fixed/textractor_websocket_x86.dll"; do
-    [ -f "$cand" ] && { FIXED="$cand"; break; }
-  done
-  if [ "$bridge" = "fixed" ] && [ -z "$FIXED" ]; then
-    warn "fixed bridge requested but no fixed DLL in $vdir; using the stock bridge"
-    note "the in-app Text Hooker picker needs v2 (or reveal Textractor via the wizard debug box)"
-    bridge="stock"
-  fi
-  if [ "$bridge" = "fixed" ]; then
-    cp -f "$FIXED" "$DST/textractor_websocket_x86.dll"
-    cp -f "$FIXED" "$DST/textractor_websocket_x86.xdll"
-    note "bridge: FIXED fork (sha256 $(sha256sum "$DST/textractor_websocket_x86.dll" | cut -c1-12))"
-  elif [ -f "$vdir/ws-x86/textractor_websocket_x86.dll" ]; then
-    cp -f "$vdir/ws-x86/textractor_websocket_x86.dll" "$DST/textractor_websocket_x86.dll"
-    cp -f "$vdir/ws-x86/textractor_websocket_x86.dll" "$DST/textractor_websocket_x86.xdll"
-    note "bridge: stock 0.2.0"
-  else
-    err "no bridge DLL in $vdir (vendor fetch needed)"; return 1
-  fi
-
-  # Bundled known-good config; Textractor.ini is a starting point only
-  # (Textractor rewrites it on exit, so never clobber it).
   local CFG="$ROOT/translate/textractor-config"
-  if [ -f "$CFG/Textractor.ini" ] && [ ! -f "$DST/Textractor.ini" ]; then
-    cp -f "$CFG/Textractor.ini" "$DST/Textractor.ini"
+  local ARCH SRC DST FIXED cand have_any=0
+  for ARCH in x86 x64; do
+    SRC="$vdir/textractor-full/$ARCH"
+    if [ ! -d "$SRC" ]; then
+      warn "missing $SRC (vendor fetch needed; skipping $ARCH)"
+      continue
+    fi
+    DST="$HOME_DIR/$ARCH"
+    mkdir -p "$DST"
+    cp -r "$SRC/." "$DST/"
+    cp -f "$SRC/Textractor.exe" "$SRC/TextractorCLI.exe" "$SRC/texthook.dll" "$DST/"
+
+    # Textractor loads the REGISTERED copy (*.xdll), not the *.dll: both
+    # filenames must carry the same build or sessions silently run the other.
+    FIXED=""
+    for cand in "$vdir/textractor_websocket_${ARCH}.fixed.dll" \
+                "$vdir/bridge-fixed/textractor_websocket_${ARCH}.dll"; do
+      [ -f "$cand" ] && { FIXED="$cand"; break; }
+    done
+    if [ "$bridge" = "fixed" ] && [ -n "$FIXED" ]; then
+      cp -f "$FIXED" "$DST/textractor_websocket_${ARCH}.dll"
+      cp -f "$FIXED" "$DST/textractor_websocket_${ARCH}.xdll"
+      note "bridge ($ARCH): FIXED fork (sha256 $(sha256sum "$DST/textractor_websocket_${ARCH}.dll" | cut -c1-12))"
+    elif [ -f "$vdir/ws-${ARCH}/textractor_websocket_${ARCH}.dll" ]; then
+      cp -f "$vdir/ws-${ARCH}/textractor_websocket_${ARCH}.dll" "$DST/textractor_websocket_${ARCH}.dll"
+      cp -f "$vdir/ws-${ARCH}/textractor_websocket_${ARCH}.dll" "$DST/textractor_websocket_${ARCH}.xdll"
+      note "bridge ($ARCH): stock 0.2.0"
+    else
+      warn "no $ARCH bridge DLL in $vdir (translation stays silent for that arch)"
+    fi
+    if [ "$bridge" = "fixed" ] && [ -z "$FIXED" ] && [ "$ARCH" = "x86" ]; then
+      note "the in-app Text Hooker picker needs v2 (or reveal Textractor via the wizard debug box)"
+    fi
+
+    # Bundled known-good config; Textractor.ini is a starting point only
+    # (Textractor rewrites it on exit, so never clobber it).
+    if [ -f "$CFG/Textractor.ini" ] && [ ! -f "$DST/Textractor.ini" ]; then
+      cp -f "$CFG/Textractor.ini" "$DST/Textractor.ini"
+    fi
+    # Force bridge-only: the actual fix for the stock-extension stall.
+    printf 'textractor_websocket_%s>' "$ARCH" > "$DST/SavedExtensions.txt"
+    have_any=1
+    ok "Textractor $ARCH -> $DST ($(ls "$DST" | wc -l) entries)"
+  done
+  if [ "$have_any" = "0" ]; then
+    err "no Textractor arch could be provisioned (vendor fetch needed)"; return 1
   fi
-  # Force bridge-only: the actual fix for the stock-extension stall.
-  printf 'textractor_websocket_x86>' > "$DST/SavedExtensions.txt"
 
   if [ "$link" = "1" ]; then
     local LNK="$prefix/drive_c/Textractor" f
     mkdir -p "$prefix/drive_c"
+    # A legacy per-prefix (non-symlink) install migrates its x86 config first.
     if [ -d "$LNK" ] && [ ! -L "$LNK" ]; then
       for f in SavedHooks.txt SavedGames.txt SavedRegexFilters.txt Textractor.ini; do
         [ -f "$LNK/x86/$f" ] || continue
-        if [ "$f" = "Textractor.ini" ] && [ -f "$DST/$f" ]; then continue; fi
-        cp -f "$LNK/x86/$f" "$DST/$f"
+        if [ "$f" = "Textractor.ini" ] && [ -f "$HOME_DIR/x86/$f" ]; then continue; fi
+        cp -f "$LNK/x86/$f" "$HOME_DIR/x86/$f"
       done
       rm -rf "$LNK"
     fi
@@ -522,10 +541,11 @@ install__provision_textractor() {
       cp -f "$HOME_DIR/x86/Textractor.exe" "$LNK/x86/" 2>/dev/null || true
     fi
   fi
-  ok "Textractor x86 -> $DST ($(ls "$DST" | wc -l) entries)"
-  for f in Textractor.exe TextractorCLI.exe texthook.dll textractor_websocket_x86.dll \
-           Qt5Core.dll Qt5Gui.dll Qt5Widgets.dll platforms/qwindows.dll; do
-    [ -e "$DST/$f" ] && ok "$f" || miss "$f"
+  for ARCH in x86 x64; do
+    local D="$HOME_DIR/$ARCH"
+    for f in Textractor.exe TextractorCLI.exe texthook.dll "textractor_websocket_${ARCH}.dll"; do
+      [ -e "$D/$f" ] && ok "$ARCH/$f" || miss "$ARCH/$f"
+    done
   done
 }
 

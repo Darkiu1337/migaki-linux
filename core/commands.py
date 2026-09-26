@@ -1,6 +1,6 @@
 import os
 
-from . import paths
+from . import paths, system
 
 
 def gpu_vendor(name):
@@ -23,6 +23,13 @@ def gpu_icd(name):
     if any(k in name for k in ("AMD", "ATI", "Radeon")):
         return "amd"
     return "auto"
+
+
+def _vn_engine(engine):
+    """vn-launch.sh understands auto|textractor|tyrano. RPGMaker MV/MZ under
+    Proton isn't hookable by vn-launch (NW.js has no CDP and no autoload there),
+    so it falls back to Textractor; use the rpgmaker runner for MV/MZ."""
+    return "tyrano" if engine == "tyrano" else "textractor"
 
 
 def build_command(game):
@@ -71,13 +78,26 @@ def build_command(game):
 
 
 def build_translate_command(game, gid, setup=False):
-    """Argv for a translation session (filter + DeepL in one launch).
-    setup=True opens the in-app Text Hooker picker (Textractor stays hidden);
+    """Argv for a translation session (filter + text hook in one launch).
+    Electron/TyranoScript titles use the CDP hook under Proton; RPGMaker MV/MZ
+    use the rpgmaker runner's injected page hook (its NW.js has no CDP).
+    setup=True opens the in-app Text Hooker picker (Textractor only);
     translate.show_hooker="1" reveals Textractor's window (debug)."""
     tr = game.get("translate") or {}
+    if game.get("runner") == "rpgmaker":
+        argv = [os.path.join(paths.SCRIPTS_DIR, "rpgmaker-migaki.sh"),
+                "--variant", game.get("variant", "L"),
+                "--gpu", gpu_icd(game.get("gpu", "auto (discrete GPU preferred)")),
+                "--fps", game.get("fps", "60"),
+                "--translate", "--gameid", gid,
+                "--gamepath", game["path"]]
+        if game.get("hud") == "1":
+            argv.append("--hud")
+        return argv
     argv = [os.path.join(paths.TRANSLATE_DIR, "vn-launch.sh"),
             "--exe", game["path"], "--gameid", gid,
-            "--filter", game.get("variant", "L")]
+            "--filter", game.get("variant", "L"),
+            "--engine", _vn_engine(system.translate_engine(game.get("path", "")))]
     if game.get("wow64") == "0":
         argv.append("--no-wow64")
     elif game.get("wow64") == "1":

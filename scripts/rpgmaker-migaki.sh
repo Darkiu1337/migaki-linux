@@ -22,6 +22,11 @@
 #   --fps N|off          MangoHud frame cap (default: 60; off disables)
 #   --hud                show MangoHud overlay (fps readout)
 #   --nwjsversion VER    pass through to rpgmaker-linux (e.g. 0.115.0)
+#   --translate          live VN translation: inject the page hook (the NW.js
+#                        normal build has no CDP) and start the :6677 relay;
+#                        composes with the filter. --gameid ID names the game.
+#   --stop               end this game's session (game + translation bridge +
+#                        injected hook)
 #   --no-fallback        for non-Chromium games: print guidance and exit 1
 #   --dry-run            print the resolved launch command and exit
 #   --help               this text
@@ -44,6 +49,9 @@ NOFALLBACK=0
 FPS="60"
 HUD=0
 DRYRUN=0
+TRANSLATE=0
+GAMEID=""
+CMD_MODE="run"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -53,6 +61,9 @@ while [ $# -gt 0 ]; do
     --nwjsversion) NWJSVER="$2"; shift 2 ;;
     --fps) FPS="$2"; shift 2 ;;
     --hud) HUD=1; shift ;;
+    --translate) TRANSLATE=1; shift ;;
+    --gameid) GAMEID="$2"; shift 2 ;;
+    --stop) CMD_MODE="stop"; shift ;;
     --no-fallback) NOFALLBACK=1; shift ;;
     --dry-run) DRYRUN=1; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -73,6 +84,57 @@ fi
 ak_need rpgmaker-linux
 ak_mangohud_env "$FPS" "$HUD"
 
+# --- translation plumbing: injected page hook + native :6677 relay ----------
+# The bundled NW.js is the normal build (no CDP), so we inject via the wrapper's
+# plugins_autoload dir, which menu.js executes in the page. The page hook pushes
+# tagged lines to the relay; the textbox consumes them like any other bridge.
+TRANSLATE_DIR="$(dirname "$SCRIPT_DIR")/translate"
+RPG_HOOK_SRC="$TRANSLATE_DIR/rpgmaker_hook.js"
+RPG_AUTOLOAD=""; RPG_HOOK_DST=""; RPG_BRIDGE_PID=""
+
+rpg_autoload_dir() {
+  local tpl
+  tpl="$(ak_rpgmaker_template)" || return 1
+  printf '%s/jspatches/plugins_autoload' "$(dirname "$tpl")"
+}
+rpg_remove_hook() {
+  local d
+  d="$(rpg_autoload_dir 2>/dev/null || true)"
+  [ -n "$d" ] && rm -f "$d/migaki_hook.js"
+}
+rpg_stop_bridge() {
+  pkill -f "[r]pgmaker_bridge.py" 2>/dev/null || true
+}
+rpg_translate_start() {
+  RPG_AUTOLOAD="$(rpg_autoload_dir)" || return 1
+  RPG_HOOK_DST="$RPG_AUTOLOAD/migaki_hook.js"
+  [ -f "$RPG_HOOK_SRC" ] || ak_die "translation hook missing: $RPG_HOOK_SRC"
+  mkdir -p "$RPG_AUTOLOAD"
+  cp -f "$RPG_HOOK_SRC" "$RPG_HOOK_DST"
+  rpg_stop_bridge   # never two relays on :6677
+  mkdir -p "$HOME/.cache/migaki"
+  nohup python3 "$TRANSLATE_DIR/rpgmaker_bridge.py" --port 6677 --gameid "$GAMEID" \
+        >>"$HOME/.cache/migaki/rpgmaker-bridge.log" 2>&1 &
+  RPG_BRIDGE_PID=$!
+  ak_log "translation: hook installed, bridge on :6677 (pid $RPG_BRIDGE_PID)"
+}
+rpg_translate_cleanup() {
+  [ -n "$RPG_HOOK_DST" ] && rm -f "$RPG_HOOK_DST"
+  [ -n "$RPG_BRIDGE_PID" ] && kill "$RPG_BRIDGE_PID" 2>/dev/null || true
+  RPG_BRIDGE_PID=""
+}
+
+if [ "$CMD_MODE" = "stop" ]; then
+  ak_kill_strays "nw --ozone-platform"
+  rpg_stop_bridge
+  rpg_remove_hook
+  ak_log "stop: rpgmaker session ended"
+  exit 0
+fi
+
+# A hook left behind by a crash must not load into an unrelated game.
+rpg_remove_hook
+
 # Engine sniff via the shared detector (MV/MZ incl. www/ depth normalization).
 _DETECT="$(ak_detect_engine "$GAMEPATH")"
 ENGINE="${_DETECT%%|*}"; _rest="${_DETECT#*|}"
@@ -85,6 +147,9 @@ if [ "$ENGINE" != "rpgmaker-mv" ]; then
   EXE_CANDIDATE="$(find "$GAMEPATH" -maxdepth 1 -iname 'Game.exe' | head -n 1)"
   ak_log "not an MV/MZ (Chromium) game: vkBasalt filtering is not possible here."
   ak_log "(if you picked a www/ subfolder, try its parent folder instead.)"
+  if [ "$TRANSLATE" = "1" ]; then
+    ak_log "warning: translation needs a Chromium (MV/MZ) title; launching untranslated."
+  fi
   if [ -n "$EXE_CANDIDATE" ]; then
     ak_log "this title usually runs fine under Proton instead, try:"
     ak_log "  proton-migaki.sh \"$EXE_CANDIDATE\""
@@ -104,9 +169,12 @@ if [ "$ENGINE" != "rpgmaker-mv" ]; then
 fi
 
 # --- Chromium (MV/MZ) path: temporary Vulkan-flag patch, restored on exit ---
-cleanup() { ak_template_restore; }
+cleanup() { ak_template_restore; rpg_translate_cleanup; }
 trap cleanup EXIT INT TERM
 ak_template_patch
+if [ "$TRANSLATE" = "1" ] && [ "$DRYRUN" != "1" ]; then
+  rpg_translate_start
+fi
 
 # Stale Chromium singleton locks (from killed runs) break startup; clear them.
 rm -f "$HOME/.config/RPG Maker MV/MZ (cicpoffs mount)/Singleton"* 2>/dev/null || true
@@ -145,7 +213,11 @@ CMD=(rpgmaker-linux)
 CMD+=(--gamepath "$GAMEPATH")
 
 if [ "$DRYRUN" = "1" ]; then
-  echo "filter=$VARIANT engine=mv-mz gpu=$GPU fps=$FPS hud=$HUD (template patched temporarily)"
+  echo "filter=$VARIANT engine=mv-mz gpu=$GPU fps=$FPS hud=$HUD translate=$TRANSLATE (template patched temporarily)"
+  if [ "$TRANSLATE" = "1" ]; then
+    echo "inject: $(rpg_autoload_dir)/migaki_hook.js"
+    echo "relay:  rpgmaker_bridge.py --port 6677 --gameid ${GAMEID:-<id>}"
+  fi
   printf '%q ' "${CMD[@]}"
   echo
   cleanup

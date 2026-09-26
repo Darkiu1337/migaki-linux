@@ -248,3 +248,19 @@ def detect(path):
     if len(parts) != 5:
         return None
     return tuple(parts)
+
+
+def translate_engine(path):
+    """Hook transport for a game's translation session:
+      "tyrano"      — Electron/Chromium bundle, CDP DOM hook (Proton path)
+      "rpgmaker"    — RPGMaker MV/MZ (NW.js normal build: no CDP), injected
+                      page hook via the rpgmaker runner
+      "textractor"  — everything else (GDI/engine hooks)
+    """
+    det = detect(path) if path else None
+    if det:
+        if det[0] in ("electron", "tyrano"):
+            return "tyrano"
+        if det[0] == "rpgmaker-mv":
+            return "rpgmaker"
+    return "textractor"

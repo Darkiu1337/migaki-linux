@@ -7,7 +7,12 @@ Luna-style textbox — composed with the Restore filter in a single launch.
 ## Flow
 
 1. **Enable** per game: GUI game wizard/edit (Translation page) or
-   `migaki edit` → `translate`. Proton/Windows games only.
+   `migaki edit` → `translate`. Proton/Windows games only. Three hook
+   transports exist and are chosen automatically by engine sniffing: native
+   VNs use **Textractor** (GDI/engine hooks); Electron/TyranoScript bundles —
+   rendered by Chromium, invisible to Textractor — use a **CDP DOM hook**;
+   and **RPGMaker MV/MZ** (NW.js *normal* build: no CDP) use an **injected
+   page hook** through the rpgmaker runner. See the two sections below.
 2. **First run (Setup Text Hooker for translation)**: this GUI button — or
    just pressing **Translate** when no hook is saved yet, which auto-runs
    Setup — launches the game and opens the Text Hooker picker. **Textractor
@@ -44,6 +49,69 @@ selection) on `:6677`; native code filters by thread, translates via Brave CDP
 DeepL and displays. Before translation each line passes through an auto-built
 **name glossary**, and DeepL may be fed **context** (previous lines) — see
 "Translation quality" below.
+
+Both transports publish the **same** `:6677` contract (tagged lines), so the
+textbox, the picker and the glossary are transport-agnostic. The Textractor
+build is chosen by the game executable's PE bitness (x86 or x64).
+
+## TyranoScript / Electron (CDP DOM hook)
+
+TyranoScript titles exported as Electron apps render dialogue in the Chromium
+DOM, not through GDI, so **Textractor never sees a line** (upstream confirms:
+Artikash/Textractor#1448). For these, `vn-launch.sh` sniffs the engine
+(`ak_detect_engine` → `electron`/`tyrano`) and instead:
+
+1. launches the game directly (no `wscript`, no Textractor) with
+   `--remote-debugging-port=<cdp-port>` (default 9223);
+2. starts `translate/tyrano_hook.py`, which attaches to the page target over
+   CDP, installs TyranoScript's own `tag-text-message` listener (fires once
+   per text tag with the raw source line), strips the inline control markers
+   (`[p]`, `[l]`, `[cm]`, …) and broadcasts each line tagged as a synthetic
+   thread: `~#1*~5452414E~Tyrano~<text>`.
+
+The hook is native (Linux); it launches no Wine process and exits when the
+game's CDP endpoint stays gone. It reads the DOM, so it also works for any
+other TyranoScript/Electron bundle. `tyrano_hook.py` serves `:6677` itself
+through a small dependency-free WebSocket server (`translate/ws_bridge.py`),
+so `hook_client.py` / `textbox.py` / the GUI picker consume it unchanged. No
+thread needs picking — the synthetic thread is pre-selected (`*`) — so the
+GUI does not force Setup for these titles; **Setup Text Hooker for
+translation** still opens the picker and shows the `Tyrano` thread.
+
+`--engine auto|textractor|tyrano` overrides the sniff; `--cdp-port` moves the
+debug port. See the per-game notes for verified examples.
+
+## RPGMaker MV/MZ (injected page hook)
+
+RPGMaker MV/MZ run on NW.js, which — unlike Electron — ships a **normal build
+with the remote debugging server compiled out**, so the CDP hook cannot attach
+(only NW.js *SDK* builds have DevTools). Detection still reports
+`rpgmaker-mv`; `translate_engine` maps it to the `rpgmaker` transport, and the
+**rpgmaker runner** (`scripts/rpgmaker-migaki.sh --translate`) does:
+
+1. copies `translate/rpgmaker_hook.js` into the wrapper's `plugins_autoload`
+   dir (`<mainfd>/nwjs/nwjs/packagefiles/jspatches/plugins_autoload`), which
+   `menu.js` executes in the page ~400 ms after load (no game file is touched);
+2. starts `translate/rpgmaker_bridge.py`, a native relay on `:6677`;
+3. launches the game (filter composes as usual).
+
+The injected hook wraps `Window_Message.prototype.startMessage` (MV and MZ),
+reads `$gameMessage.allText()` through `convertEscapeCharacters` (so `\N[n]`
+names, `\V[n]` variables resolve), strips the draw codes (`\C[n]`, `\I[n]`,
+`\!`, …) and pushes each line tagged as a synthetic thread:
+
+    ~#1*~5250474D~RPGMaker~<text>
+
+The relay forwards uplink lines to every other client, so the textbox, the
+picker and the glossary consume them exactly like Textractor/CDP lines. No
+thread needs picking (the synthetic thread is pre-selected), so the GUI does
+not force Setup. The relay and injected hook are removed on exit and by
+`rpgmaker-migaki.sh --stop`.
+
+Note: this needs the **rpgmaker runner**. A Proton-launched MV/MZ title uses
+the game's own bundled normal NW.js (no CDP) and its `package.json` as the
+manifest, so neither the CDP hook nor the wrapper's autoload can reach it —
+use the rpgmaker runner for RPGMaker translation.
 
 Filter + translation compose: `vn-launch.sh --filter <variant>` applies the
 same vkBasalt mechanism as `proton-migaki.sh`. A/B unfiltered launches stay
@@ -301,18 +369,28 @@ bottom and scrolls when you scroll up.
   Reference title.
 * **mmg / Start.exe** (Atelier KAGUYA2/6 engine hooks): generic-ladder
   title, bulk-tolerant so far.
+* **renzu_himitu** (TyranoScript 6, Electron): auto-detected `electron` →
+  CDP DOM hook, synthetic thread `Tyrano` (no picking). Textractor sees
+  nothing here — the dialogue never reaches GDI.
+* **RJ01701172 / WhichSwitch** (RPGMaker MZ desktop exports, NW.js *normal*
+  build): auto-detected `rpgmaker-mv` → injected page hook on the rpgmaker
+  runner, synthetic thread `RPGMaker` (no picking). Neither Textractor nor CDP
+  can see these — the text is Chromium/PIXI.
 
 ## Install behavior
 
 `install.sh` offers translation support (default Yes): fetches the pinned
-Textractor bundle + bridge (fixed v2 asset preferred, stock fallback),
-provisions Textractor **once per machine** under
-`~/.local/share/migaki/textractor` (applying the bundled
+Textractor bundle + bridge (fixed v2 asset preferred, stock fallback) and
+provisions **both architectures** under
+`~/.local/share/migaki/textractor/{x86,x64}` (applying the bundled
 `translate/textractor-config/` config), symlinks each Wine prefix's
 `drive_c/Textractor` to it, and symlinks `vn-launch` / `vn-textbox` /
 `vn-translate` into `~/.local/bin`. `vn-launch.sh` re-provisions/links on
 demand, so a prefix umu only creates on first launch is covered too — and it
-forces the bridge-only extension set every session.
+forces the bridge-only extension set every session. The fixed x64 bridge
+asset is not published yet, so 64-bit titles use the stock x64 bridge (the
+tagged picker still works for the CDP Tyrano hook; stock x64 only follows
+Textractor's own selection).
 Settings come from `translate/config.json` and the games registry from
 `translate/translate.json` — both seeded from their `.sample` files on
 first install (never overwritten); the Python entry points also start on a
@@ -334,6 +412,11 @@ the detected backend.
 ## Limits
 
 * Proton/Windows games only (hook injection needs Wine + one shared session).
+  Two transports: Textractor (x86/x64, chosen by the exe's PE bitness) for
+  GDI/engine VNs, and the CDP DOM hook for Electron/TyranoScript bundles.
+* TyranoScript/Electron titles need a remoted-debug port; the game must honour
+  `--remote-debugging-port` (Electron/Chromium do). A title that disables it
+  would need a preload/asar injection instead.
 * One live session at a time (shared prefix design).
 * The Text Hooker needs live text: run Setup Text Hooker for translation and
   advance the game while it listens (it keeps listening until you pick or

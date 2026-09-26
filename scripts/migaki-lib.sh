@@ -410,30 +410,71 @@ ak_vkbasalt_env() {
 }
 
 # --- Textractor provisioning (canonical dir + per-prefix symlink) -----------
-# One install per machine under ~/.local/share/migaki/textractor; each prefix's
-# drive_c/Textractor is a symlink to it. The extension set is ALWAYS forced
-# bridge-only: Textractor otherwise loads its six stock extensions (Google
-# Translate, ...) when SavedExtensions.txt is missing, which stalls the
-# sentence pipeline (docs/translate.md).
+# One install per machine under ~/.local/share/migaki/textractor, holding both
+# x86 and x64 builds (<home>/x86, <home>/x64); each prefix's drive_c/Textractor
+# is a symlink to it. The game's bitness picks the build (ak_pe_arch), because
+# Textractor can only inject a hook DLL matching the target process. The
+# extension set is ALWAYS forced bridge-only: Textractor otherwise loads its
+# six stock extensions (Google Translate, ...) when SavedExtensions.txt is
+# missing, which stalls the sentence pipeline (docs/translate.md).
 ak_textractor_home() {
   printf '%s' "${MIGAKI_TEXTTRACTOR_HOME:-$HOME/.local/share/migaki/textractor}"
 }
-ak_textractor_x86() { printf '%s/x86' "$(ak_textractor_home)"; }
+# Build dir for an architecture (x86 | x64). Unknown/empty defaults to x86
+# (the proven default used by the reference 32-bit titles).
+ak_textractor_dir() { # [arch]
+  local arch="${1:-x86}"
+  case "$arch" in x64|X64|amd64|AMD64) arch="x64" ;; *) arch="x86" ;; esac
+  printf '%s/%s' "$(ak_textractor_home)" "$arch"
+}
+# Back-compat alias (x86 build dir).
+ak_textractor_x86() { ak_textractor_dir x86; }
 
-ak_textractor_bridge_only() { # <x86-dir>
-  local x86="${1:-$(ak_textractor_x86)}"
-  [ -d "$x86" ] || return 0
-  printf 'textractor_websocket_x86>' > "$x86/SavedExtensions.txt"
+# Textractor build to use for a Windows executable: reads the PE Machine field
+# (0x8664 = AMD64/x64, 0x014c = i386/x86). Anything unparseable or non-PE
+# defaults to x86, the proven default. Override with MIGAKI_TEXTTRACTOR_ARCH.
+ak_pe_arch() { # <exe>
+  if [ -n "${MIGAKI_TEXTTRACTOR_ARCH:-}" ]; then
+    case "$MIGAKI_TEXTTRACTOR_ARCH" in
+      x64|X64|amd64|AMD64) printf 'x64' ;;
+      *) printf 'x86' ;;
+    esac
+    return 0
+  fi
+  python3 - "$1" <<'PY' 2>/dev/null || printf 'x86'
+import struct, sys
+try:
+    with open(sys.argv[1], "rb") as f:
+        if f.read(2) != b"MZ":
+            raise ValueError
+        f.seek(0x3C)
+        e_lfanew = struct.unpack("<I", f.read(4))[0]
+        f.seek(e_lfanew)
+        if f.read(4) != b"PE\0\0":
+            raise ValueError
+        machine = struct.unpack("<H", f.read(2))[0]
+    print("x64" if machine == 0x8664 else "x86")
+except Exception:
+    print("x86")
+PY
 }
 
-# Ensure Textractor is provisioned in <prefix> and bridge-only is enforced.
-# A legacy per-prefix install is used as-is (no vendor needed); only a prefix
-# with no Textractor triggers canonical provisioning. Prints the Textractor.exe
-# path ("" when it could not be provisioned).
-ak_textractor_ensure() { # <prefix> [bridge]
-  local prefix="$1" bridge="${2:-fixed}"
+ak_textractor_bridge_only() { # [arch]
+  local dir
+  dir="$(ak_textractor_dir "${1:-x86}")"
+  [ -d "$dir" ] || return 0
+  printf 'textractor_websocket_%s>' "$(basename "$dir")" > "$dir/SavedExtensions.txt"
+}
+
+# Ensure Textractor is provisioned in <prefix> for the given arch and
+# bridge-only is enforced. A legacy per-prefix install is used as-is (no vendor
+# needed); only a prefix with no Textractor triggers canonical provisioning.
+# Prints the Textractor.exe path ("" when it could not be provisioned).
+ak_textractor_ensure() { # <prefix> [bridge] [arch]
+  local prefix="$1" bridge="${2:-fixed}" arch
+  arch="$(basename "$(ak_textractor_dir "${3:-x86}")")"
   [ -n "$prefix" ] || return 1
-  local exe="$prefix/drive_c/Textractor/x86/Textractor.exe"
+  local exe="$prefix/drive_c/Textractor/$arch/Textractor.exe"
   if [ ! -f "$exe" ]; then
     # Single installer, internal mode: fetches the pinned vendor bundle when
     # missing, provisions the canonical dir and links it into this prefix.
@@ -441,7 +482,7 @@ ak_textractor_ensure() { # <prefix> [bridge]
     [ -f "$inst" ] || return 1
     bash "$inst" --provision-textractor --prefix "$prefix" --bridge "$bridge" >&2 || return 1
   fi
-  ak_textractor_bridge_only "$prefix/drive_c/Textractor/x86"
+  ak_textractor_bridge_only "$arch"
   printf '%s' "$exe"
 }
 

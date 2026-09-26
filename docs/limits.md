@@ -131,6 +131,13 @@ anything else asks with the suggestion pre-selected.
 | `*.pck` + exe / ELF | godot | proton / native |
 | `resources/*.asar` + `.exe` | electron | proton (experimental) |
 | `tyrano/` + `data/` + `index.html` | tyrano | rpgmaker (filter unlikely) |
+
+`electron`/`tyrano` are the translation **CDP DOM hook** case and
+`rpgmaker-mv` (MV/MZ on the normal NW.js build) is the **injected page hook**
+case (`docs/translate.md`): Chromium never calls GDI, so Textractor cannot hook
+them. `vn-launch.sh` auto-selects `tyrano_hook.py`; the rpgmaker runner injects
+`rpgmaker_hook.js` + the `:6677` relay. Everything else hooks with Textractor,
+x86/x64 by the exe's PE bitness.
 | `*.AppImage` | appimage | native |
 | lone `.exe` / ELF / nothing recognizable | exe / elf / unknown | proton / native / ask |
 

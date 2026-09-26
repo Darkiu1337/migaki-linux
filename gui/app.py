@@ -610,14 +610,17 @@ class GuiBackend(QObject):
         game = store.load_games().get(gid)
         if not game:
             return "Unknown game."
-        if game.get("runner") != "proton":
-            return "Translation needs a Proton/Windows game."
+        if game.get("runner") not in ("proton", "rpgmaker"):
+            return "Translation needs a Proton/Windows or RPGMaker MV/MZ game."
         tr = game.get("translate") or {}
         if tr.get("enabled") != "1":
             return "Enable translation for this game first (Edit…)."
         # A hook is "saved" when either a hook code or a picked thread exists.
-        hook_saved = bool((tr.get("hook_code") or "").strip()
-                          or (tr.get("thread") or "").strip())
+        # Tyrano (CDP) and RPGMaker MV/MZ (injected page hook) auto-select a
+        # synthetic thread, so don't force the Textractor Setup for them.
+        is_auto_hook = system.translate_engine(game.get("path", "")) in ("tyrano", "rpgmaker")
+        hook_saved = is_auto_hook or bool((tr.get("hook_code") or "").strip()
+                                          or (tr.get("thread") or "").strip())
         if not setup and not hook_saved:
             self.logAppended.emit(
                 "No hook recorded for this game — starting Setup Text Hooker.")
@@ -712,14 +715,14 @@ class GuiBackend(QObject):
                     return
                 self.logAppended.emit("stopping live session for relaunch…")
                 self._set_status("Stopping live session…")
-                process.stop_session(game["path"])
+                process.stop_session(game["path"], runner=game.get("runner", "proton"))
                 self.logAppended.emit("stopped.")
             elif self._last_prompt_title == "Wedged translation session":
                 if btn != 0:
                     return
                 self.logAppended.emit("clearing wedged session…")
                 self._set_status("Clearing wedged session…")
-                process.stop_session(game["path"])
+                process.stop_session(game["path"], runner=game.get("runner", "proton"))
                 self.logAppended.emit("cleared.")
             elif self._last_prompt_title == "Stale game processes":
                 if btn == 0:
@@ -777,6 +780,9 @@ class GuiBackend(QObject):
                 game = store.load_games().get(gid)
                 if game and process.kill_strays(process.stray_token(game)):
                     self.logAppended.emit("cleaned stray processes.")
+                if game and game.get("runner") == "rpgmaker":
+                    # Drop the injected hook + the :6677 relay too.
+                    process.stop_session(game["path"], runner="rpgmaker")
         if self.textbox_proc is not None:
             if self.textbox_proc.poll() is None:
                 process.kill_textbox_group(self.textbox_proc, _sig.SIGKILL)

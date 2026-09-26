@@ -1,10 +1,11 @@
 import json
 import os
+import re
 import signal
 import subprocess
 import time
 
-from . import paths, store
+from . import paths, store, system
 
 
 def stray_token(game):
@@ -18,7 +19,15 @@ def find_strays(token):
     """PIDs matching token, self-excluding via bracket pattern. Never raises."""
     if not token:
         return []
-    pat = f"[{token[0]}]{token[1:]}"
+    if re.search(r"\s", token):
+        # Multi-word token (the rpgmaker NW.js argv): plain substring match,
+        # self-excluded by bracket-wrapping the first char.
+        pat = f"[{token[0]}]{token[1:]}"
+    else:
+        # Plain game basename: require a path separator before it. Without the
+        # anchor, Textractor's own argv ("Textractor.exe /p<game>.exe") matches
+        # and the GUI mistakes the lingering hooker for a running game.
+        pat = r"[\\/]" + re.escape(token)
     try:
         out = subprocess.run(["pgrep", "-f", pat], capture_output=True,
                              text=True, timeout=10).stdout
@@ -272,13 +281,20 @@ def translate_wedge_pids(game_base=""):
     return []
 
 
-def stop_session(game_path, timeout=90):
-    """vn-launch.sh --stop-exe: ends game hooks, textbox backend and its
-    browser (a backend left running keeps translating and re-shows)."""
+def stop_session(game_path, timeout=90, runner="proton"):
+    """End a translation session: game hooks, textbox backend and its browser
+    (a backend left running keeps translating and re-shows). The rpgmaker
+    runner also drops the injected page hook and the :6677 relay."""
     try:
-        subprocess.run([os.path.join(paths.TRANSLATE_DIR, "vn-launch.sh"),
-                        "--stop-exe", game_path], timeout=timeout,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if runner == "rpgmaker":
+            gamedir = game_path if os.path.isdir(game_path) else os.path.dirname(game_path)
+            subprocess.run([os.path.join(paths.SCRIPTS_DIR, "rpgmaker-migaki.sh"),
+                            "--stop", "--gamepath", gamedir], timeout=timeout,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run([os.path.join(paths.TRANSLATE_DIR, "vn-launch.sh"),
+                            "--stop-exe", game_path], timeout=timeout,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
         pass
 
@@ -296,7 +312,10 @@ def spawn_textbox(gid=None):
             # Live-follow this game's stored thread (picker takes effect
             # without restarting the session).
             argv += ["--gameid", gid]
-        thread = (tr.get("thread") or "").strip()
+        # Tyrano/Electron and RPGMaker MV/MZ use their hook's synthetic,
+        # pre-selected thread; a stale Textractor thread must not mask it.
+        engine = system.translate_engine((game or {}).get("path", ""))
+        thread = "" if engine in ("tyrano", "rpgmaker") else (tr.get("thread") or "").strip()
         if thread:
             argv += ["--thread", thread]
         show_browser = tr.get("show_browser") == "1"

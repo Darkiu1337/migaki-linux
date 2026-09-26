@@ -199,36 +199,50 @@ fi
 # on a missing SavedExtensions.txt, stalling the pipeline (docs/translate.md).
 _TX="$(ak_config_get prefix "")"
 [ -n "$_TX" ] || _TX="$HOME/.local/share/migaki/prefixes/default"
-_TX86="$_TX/drive_c/Textractor/x86"
-_CX86="$(ak_textractor_x86)"
-if [ -f "$_TX86/Textractor.exe" ]; then
-  ok "Textractor installed (prefix: $_TX86)"
-  [ -L "$_TX/drive_c/Textractor" ] \
-    && ok "Textractor dir is a symlink -> $(readlink "$_TX/drive_c/Textractor")"
-  _SE="$_TX86/SavedExtensions.txt"
-  if [ -f "$_SE" ]; then
-    if [ "$(tr -d '[:space:]' < "$_SE")" = "textractor_websocket_x86>" ]; then
-      ok "Textractor extensions: bridge-only"
+_TANY=0
+for _ARCH in x86 x64; do
+  _TD="$_TX/drive_c/Textractor/$_ARCH"
+  _CD="$(ak_textractor_dir "$_ARCH")"
+  if [ -f "$_TD/Textractor.exe" ]; then
+    _TANY=1
+    ok "Textractor ($_ARCH) installed (prefix: $_TD)"
+    _SE="$_TD/SavedExtensions.txt"
+    if [ -f "$_SE" ]; then
+      if [ "$(tr -d '[:space:]' < "$_SE")" = "textractor_websocket_${_ARCH}>" ]; then
+        ok "Textractor ($_ARCH) extensions: bridge-only"
+      else
+        bad "Textractor ($_ARCH) SavedExtensions.txt is not bridge-only — re-run ./install.sh (docs/translate.md)"
+      fi
     else
-      bad "Textractor SavedExtensions.txt is not bridge-only — re-run ./install.sh (docs/translate.md)"
+      bad "Textractor ($_ARCH) SavedExtensions.txt missing — re-run ./install.sh"
     fi
-  else
-    bad "Textractor SavedExtensions.txt missing — re-run ./install.sh"
+    _BX="$_TD/textractor_websocket_${_ARCH}.xdll"
+    if [ -f "$_TDIR/vendor/textractor_websocket_${_ARCH}.fixed.dll" ] \
+       && [ -f "$_BX" ] \
+       && cmp -s "$_TDIR/vendor/textractor_websocket_${_ARCH}.fixed.dll" "$_BX"; then
+      ok "v2 (tagged) bridge installed ($_ARCH)"
+    else
+      echo "note: stock $_ARCH bridge installed — the in-app Text Hooker picker needs the v2 build (docs/translate.md)"
+    fi
+  elif [ -f "$_CD/Textractor.exe" ]; then
+    ok "Textractor ($_ARCH) canonical install present ($_CD) but not linked into $_TX"
+    _TANY=1
   fi
-  _BX="$_TX86/textractor_websocket_x86.xdll"
-  if [ -f "$_TDIR/vendor/textractor_websocket_x86.fixed.dll" ] \
-     && [ -f "$_BX" ] \
-     && cmp -s "$_TDIR/vendor/textractor_websocket_x86.fixed.dll" "$_BX"; then
-    ok "v2 (tagged) bridge installed"
-  else
-    echo "note: stock text bridge installed — the in-app Text Hooker picker needs the v2 build (docs/translate.md)"
-  fi
-elif [ -f "$_CX86/Textractor.exe" ]; then
-  ok "Textractor canonical install present ($_CX86) but not linked into $_TX"
+done
+[ "$_TANY" = "0" ] && skip "Textractor not installed (run install.sh translation step)"
+[ -L "$_TX/drive_c/Textractor" ] \
+  && ok "Textractor dir is a symlink -> $(readlink "$_TX/drive_c/Textractor")"
+unset _TX _TD _CD _SE _BX _ARCH _TANY
+if [ -f "$_TDIR/tyrano_hook.py" ]; then
+  ok "Tyrano/Electron CDP hook (tyrano_hook.py)"
 else
-  skip "Textractor not installed (run install.sh translation step)"
+  bad "translate/tyrano_hook.py missing"
 fi
-unset _TX _TX86 _CX86 _SE _BX
+if [ -f "$_TDIR/rpgmaker_hook.js" ] && [ -f "$_TDIR/rpgmaker_bridge.py" ]; then
+  ok "RPGMaker MV/MZ injected hook (rpgmaker_hook.js + relay)"
+else
+  bad "translate/rpgmaker_hook.js or rpgmaker_bridge.py missing"
+fi
 _QD="$(python3 -c "from PySide6.QtCore import QLibraryInfo; print(QLibraryInfo.path(QLibraryInfo.LibraryPath.QmlImportsPath))" 2>/dev/null || true)"
 _QMISSING=""
 if [ -z "$_QD" ]; then

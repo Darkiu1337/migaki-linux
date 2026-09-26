@@ -83,7 +83,12 @@ that is the whole effect. Nothing is upscaled; resolution never changes.
   (e.g. Japanese VNs).
 * **VN translation** (Proton): per-game DeepL toggle — hooked Japanese dialogue
   translated live into a Luna-style textbox; composes with the filter in one
-  launch. **Setup Text Hooker for translation** runs the game and opens an
+  launch. Three hook transports are chosen automatically: **Textractor**
+  (x86/x64 by the exe's PE bitness) for GDI/engine VNs, a **CDP DOM hook** for
+  Electron/TyranoScript bundles Textractor cannot see, and an **injected page
+  hook** for RPGMaker MV/MZ (NW.js normal build — no CDP) on the rpgmaker
+  runner. **Setup Text Hooker for translation** runs the game and
+  opens an
   in-app text-hook picker; **Textractor stays hidden** (our window is the only
   interface). Pressing **Translate** with no hook saved auto-runs Setup; once
   a thread is picked it starts translating immediately (the running textbox

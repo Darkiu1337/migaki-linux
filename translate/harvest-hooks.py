@@ -25,6 +25,23 @@ def wine_path(unix, prefix):
     return "Z:" + p.replace("/", "\\")
 
 
+def pe_arch(path):
+    """'x64' | 'x86' | '' from the PE Machine field (mirrors ak_pe_arch)."""
+    try:
+        with open(path, "rb") as f:
+            if f.read(2) != b"MZ":
+                return ""
+            f.seek(0x3C)
+            off = int.from_bytes(f.read(4), "little")
+            f.seek(off)
+            if f.read(4) != b"PE\0\0":
+                return ""
+            machine = int.from_bytes(f.read(2), "little")
+        return "x64" if machine == 0x8664 else "x86"
+    except OSError:
+        return ""
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--exe", required=True)
@@ -43,14 +60,25 @@ def main():
     if not prefix:
         prefix = os.path.expanduser("~/.local/share/migaki/prefixes/default")
 
-    saved = os.path.join(prefix, "drive_c", "Textractor", "x86", "SavedHooks.txt")
+    # SavedHooks lives in the arch dir matching the game's bitness; fall back
+    # to the other build so a stale record is still found.
+    arch = pe_arch(args.exe)
+    archs = ([arch] if arch else []) + [a for a in ("x86", "x64") if a != arch]
+    candidates = [os.path.join(prefix, "drive_c", "Textractor", a, "SavedHooks.txt")
+                  for a in archs]
     vexe = wine_path(args.exe, prefix)
+    saved = ""
     lines = []
-    try:
-        with open(saved, encoding="utf-8", errors="replace") as f:
-            lines = [l.strip() for l in f.read().splitlines() if l.strip()]
-    except OSError:
-        print(f"harvest: no SavedHooks.txt at {saved}")
+    for cand in candidates:
+        try:
+            with open(cand, encoding="utf-8", errors="replace") as f:
+                lines = [l.strip() for l in f.read().splitlines() if l.strip()]
+            saved = cand
+            break
+        except OSError:
+            continue
+    if not saved:
+        print(f"harvest: no SavedHooks.txt under {prefix}/drive_c/Textractor/")
         return 1
 
     # Upstream format: "path , code1 , code2 ... [|ctx:ctx2:code]" — last line
