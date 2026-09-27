@@ -10,6 +10,8 @@ coredump-*
 .DS_Store
 *~
 *.swp
+# timestamped local backups (e.g. placement.py.bak-20260926-065430)
+*.bak-*
 # local install/test leftovers (never commit a real library)
 test-games.json
 # generated at install/first-run time, not source

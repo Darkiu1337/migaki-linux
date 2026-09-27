@@ -175,6 +175,13 @@ if command -v rpgmaker-linux >/dev/null 2>&1; then
 else
   echo "note: rpgmaker-linux missing (only the rpgmaker runner needs it)"
 fi
+# Ren'Py's GL renderer dlopen()s libXmu.so.6; without it native Ren'Py titles
+# cannot present through GL (the log shows "Unknown renderer: gl").
+if ldconfig -p 2>/dev/null | grep -q 'libXmu\.so\.6'; then
+  ok "libXmu.so.6 (native Ren'Py GL renderer)"
+else
+  echo "note: libXmu.so.6 missing — native Ren'Py titles can't bring up the GL renderer (install libxmu)"
+fi
 
 # 6. Live chain test: vkcube through the layer with a rendered L config.
 if [ "$LIVE" = "no" ]; then

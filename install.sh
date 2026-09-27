@@ -201,8 +201,9 @@ pkg_available() {
 }
 pm_update() {
   case "$PM" in
-    deb) echo "  refreshing apt package lists..."; sudo apt-get update ;;
+    deb) echo "  refreshing apt package lists..."; sudo apt-get update || true ;;
     arch) sudo pacman -Sy >/dev/null 2>&1 || true ;;
+    fed) sudo dnf -q makecache 2>/dev/null || true ;;
   esac
 }
 pm_install_batch() {
@@ -233,6 +234,8 @@ zenity:zenity|zenity|zenity
 gum:gum|@gum|gum
 mangohud:mangohud|mangohud|mangohud
 vkcube:vulkan-tools|vulkan-tools|vulkan-tools
+glxinfo:@glxinfo|@glxinfo|@glxinfo
+pgrep:procps-ng|procps|procps-ng
 icoextract:icoextract|python3-icoextract|@pip:icoextract"
 
 # ===========================================================================
@@ -587,6 +590,17 @@ step_deps() {
     p="$(pm_col "$arch_p" "$deb_p" "$fed_p")"
     case "$p" in
       "@gum") if [ "$PM" = "deb" ]; then WANT_GUM_DEB=1; else add_pkg gum; fi ;;
+      "@glxinfo")
+        # glxinfo lives in mesa-utils on Arch/Debian, and in glx-utils (a
+        # subpackage of mesa-demos) on Fedora.
+        case "$PM" in
+          arch) add_pkg mesa-utils ;;
+          deb)  add_pkg mesa-utils ;;
+          fed)  if pkg_available glx-utils; then add_pkg glx-utils
+                elif pkg_available mesa-demos; then add_pkg mesa-demos
+                else add_note "glxinfo (mesa-demos / glx-utils)"; fi ;;
+          *)    add_note "glxinfo (mesa-utils / mesa-demos)" ;;
+        esac ;;
       "@pip:"*) add_pip "${p#@pip:}" ;;
       ""|"-") add_note "$tool (see requirements.md)" ;;
       *) add_pkg $p ;;
@@ -609,6 +623,22 @@ EOF
   _pyimport requests "python-requests (DeepL browser automation)" \
     python-requests python3-requests python-requests
   unset -f _pyimport
+
+  # Shared library with no CLI to probe: Ren'Py's GL renderer imports
+  # libXmu.so.6. Only native Ren'Py titles need it, so a soft note (not miss).
+  if ldconfig -p 2>/dev/null | grep -q 'libXmu\.so\.6'; then
+    ok "libXmu (native Ren'Py GL renderer)"
+  else
+    note "libXmu.so.6 not found — native Ren'Py titles can't bring up the GL renderer"
+    if [ "$CHECK_ONLY" = "0" ]; then
+      case "$PM" in
+        arch) add_pkg libxmu ;;
+        deb)  add_pkg libxmu6 ;;
+        fed)  add_pkg libXmu ;;
+        *)    add_note "libXmu (see requirements.md)" ;;
+      esac
+    fi
+  fi
 
   # Chromium browser (DeepL CDP automation target).
   if chromium_any_present; then
@@ -766,7 +796,7 @@ step_vkbasalt() {
       VKBASALT_ACTION="aur"; VKBASALT_HELPER="$vh"
     else
       VKBASALT_ACTION="source"
-      add_pkg meson ninja glslang spirv-headers vulkan-headers pkgconf gcc
+      add_pkg meson ninja glslang spirv-headers vulkan-headers pkgconf gcc libx11
     fi
     unset vh
   else
@@ -776,8 +806,8 @@ step_vkbasalt() {
     else
       VKBASALT_ACTION="source"
       case "$PM" in
-        deb) add_pkg meson ninja-build glslang-tools spirv-headers libvulkan-dev pkg-config build-essential ;;
-        fed) add_pkg meson ninja-build glslang spirv-headers vulkan-headers pkgconf gcc gcc-c++ ;;
+        deb) add_pkg meson ninja-build glslang-tools spirv-headers libvulkan-dev libx11-dev pkg-config build-essential ;;
+        fed) add_pkg meson ninja-build glslang spirv-headers vulkan-headers libX11-devel pkgconf gcc gcc-c++ ;;
       esac
     fi
   fi
