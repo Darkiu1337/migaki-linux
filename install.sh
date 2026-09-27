@@ -425,11 +425,12 @@ install__fetch_vendor() {
       warn "fixed bridge asset unavailable (release '${TAG}' not published?); using the stock bridge"
       note "publish the '${TAG}' release asset, or drop the DLL at $vdir/textractor_websocket_x86.fixed.dll"
     fi
-    # x64 fork asset is optional/unpublished so far: best-effort, fall back to
-    # the stock x64 bridge (loses the tagged picker on 64-bit titles).
+    # x64 fork asset (thread-tagged broadcast for 64-bit titles), published
+    # alongside the x86 one in the same release.
+    local FIXED64_SHA="4e2f4e544b744ea8bb183f77074b876ce9f145ddeabf3d17ca305135f4b6727f"
     local FIXED64_URL="https://github.com/Darkiu1337/migaki-linux/releases/download/${TAG}/textractor_websocket_x64.dll"
-    if ! vendor_dl "$FIXED64_URL" "" "$vdir/textractor_websocket_x64.fixed.dll"; then
-      note "no x64 fixed bridge asset; 64-bit titles use the stock x64 bridge"
+    if ! vendor_dl "$FIXED64_URL" "$FIXED64_SHA" "$vdir/textractor_websocket_x64.fixed.dll"; then
+      note "x64 fixed bridge unavailable; 64-bit titles fall back to the stock x64 bridge"
     fi
   fi
 

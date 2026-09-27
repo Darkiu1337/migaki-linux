@@ -387,10 +387,11 @@ provisions **both architectures** under
 `drive_c/Textractor` to it, and symlinks `vn-launch` / `vn-textbox` /
 `vn-translate` into `~/.local/bin`. `vn-launch.sh` re-provisions/links on
 demand, so a prefix umu only creates on first launch is covered too — and it
-forces the bridge-only extension set every session. The fixed x64 bridge
-asset is not published yet, so 64-bit titles use the stock x64 bridge (the
-tagged picker still works for the CDP Tyrano hook; stock x64 only follows
-Textractor's own selection).
+forces the bridge-only extension set every session. Both the x86 and x64
+fixed bridges are published in the `translate-v2` release and deployed per
+the game's PE bitness, so 64-bit titles get the tagged picker too; a title
+whose arch asset is missing falls back to the stock bridge (which only
+follows Textractor's own selection).
 Settings come from `translate/config.json` and the games registry from
 `translate/translate.json` — both seeded from their `.sample` files on
 first install (never overwritten); the Python entry points also start on a
