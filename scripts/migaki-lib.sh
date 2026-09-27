@@ -269,11 +269,10 @@ print((nvidia or disc or [""])[0])
   return 1
 }
 
-# Vendor of the GPU that owns the X11/XWayland session — the only one that can
-# present a Vulkan swapchain for a windowed app. Chromium/ANGLE-Vulkan only
-# works on X11 ozone, so a forced non-display GPU cannot filter (its GPU
-# process fails vkCreateSwapchainKHR and the game drops to Canvas2D). Prints
-# nvidia|amd|intel, or nothing (returns 1) when glxinfo is unavailable.
+# Vendor of the GLX/XWayland renderer — the GPU the X server draws with. On a
+# hybrid laptop this can differ from the GPU that owns the physical output
+# (see ak_connector_gpu_vendors / ak_output_gpu_vendor). Prints nvidia|amd|
+# intel, or nothing (returns 1) when glxinfo is unavailable.
 ak_display_gpu_vendor() {
   command -v glxinfo >/dev/null 2>&1 || return 1
   local r
@@ -285,6 +284,49 @@ ak_display_gpu_vendor() {
     *Intel*) printf 'intel' ;;
     *) return 1 ;;
   esac
+}
+
+# Vendors of GPUs that own a connected AND enabled DRM connector — the GPUs
+# actually driving a display. Prints one vendor token per line (deduped).
+# Empty when sysfs has no DRM connectors; callers fall back to the GLX vendor.
+ak_connector_gpu_vendors() {
+  local d card vend st
+  for d in /sys/class/drm/card*-*; do
+    [ -f "$d/status" ] || continue
+    st="$(cat "$d/status" 2>/dev/null)"
+    [ "$st" = "connected" ] || continue
+    if [ -f "$d/enabled" ] && [ "$(cat "$d/enabled" 2>/dev/null)" != "enabled" ]; then
+      continue
+    fi
+    card="${d##*/}"; card="${card%%-*}"
+    vend="$(cat "/sys/class/drm/$card/device/vendor" 2>/dev/null)"
+    case "$vend" in
+      0x10de) printf 'nvidia\n' ;;
+      0x1002) printf 'amd\n' ;;
+      0x8086) printf 'intel\n' ;;
+    esac
+  done | sort -u
+}
+
+# Every vendor that can legitimately be asked to present a window: the GPUs
+# driving an active output, plus the X11/XWayland (GLX) renderer.
+ak_present_gpu_vendors() {
+  { ak_connector_gpu_vendors; ak_display_gpu_vendor 2>/dev/null || true; } | sort -u
+}
+
+# Preferred vendor for an 'auto' GPU pick: the GLX/XWayland GPU when it drives
+# an active output, else the first output-driving GPU, else the GLX GPU.
+# This matters on a hybrid laptop whose only enabled output hangs off the dGPU
+# while the compositor renders on the iGPU.
+ak_output_gpu_vendor() {
+  local vs glx
+  vs="$(ak_connector_gpu_vendors)"
+  if [ -z "$vs" ]; then ak_display_gpu_vendor; return $?; fi
+  glx="$(ak_display_gpu_vendor 2>/dev/null || true)"
+  if [ -n "$glx" ] && printf '%s\n' "$vs" | grep -qx "$glx"; then
+    printf '%s' "$glx"; return 0
+  fi
+  printf '%s' "$(printf '%s\n' "$vs" | head -n 1)"
 }
 
 # Preset family manifest (Clear: 3D-clarity effect chains, see the file's
@@ -625,9 +667,9 @@ ak_icd_file() { # nvidia|amd|intel
 }
 
 # Zink (OpenGL-on-Vulkan) env so vkBasalt can hook GL-only games.
-# GPU select: nvidia | amd | intel | auto (loader default).
+# GPU select: nvidia | amd | intel | auto (the GPU owning the active output).
 ak_zink_env() {
-  local gpu="${1:-auto}" icd
+  local gpu="${1:-auto}" icd auto_gpu
   case "$gpu" in
     nvidia|amd|intel)
       if icd="$(ak_icd_file "$gpu")"; then
@@ -637,7 +679,15 @@ ak_zink_env() {
         unset VK_ICD_FILENAMES
       fi
       ;;
-    auto) unset VK_ICD_FILENAMES ;;
+    auto)
+      # Prefer the GPU that drives the active output (on a hybrid laptop the
+      # monitor may hang off the dGPU while the compositor renders on the iGPU).
+      if auto_gpu="$(ak_output_gpu_vendor)" && icd="$(ak_icd_file "$auto_gpu")"; then
+        export VK_ICD_FILENAMES="$icd"
+      else
+        unset VK_ICD_FILENAMES
+      fi
+      ;;
     *) ak_die "unknown GPU '$gpu' (expected nvidia, amd, intel or auto)" ;;
   esac
   export __GLX_VENDOR_LIBRARY_NAME=mesa

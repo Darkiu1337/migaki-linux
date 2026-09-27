@@ -97,12 +97,29 @@ if DGPU="$(ak_discrete_gpu_name)"; then
 else
   echo "note: no discrete GPU detected — proton launches use the loader default (override with --dxvk-device)"
 fi
-# The X11/display GPU is the only one that can present a filtered
-# Chromium (RPGMaker) window; report it so a bad GPU pick is explainable.
-if DISPGPU="$(ak_display_gpu_vendor)"; then
-  ok "display GPU (X11): $DISPGPU — the only GPU that can filter Chromium/RPGMaker titles"
+# Which GPU drives which output, and which one X11 renders with. A filtered
+# Chromium/RPGMaker window can present on any GPU that owns an active output,
+# so a hybrid laptop may legitimately pick the dGPU even when the compositor
+# renders on the iGPU.
+for _d in /sys/class/drm/card*-*; do
+  [ -f "$_d/status" ] || continue
+  _st="$(cat "$_d/status" 2>/dev/null)"
+  _en="$(cat "$_d/enabled" 2>/dev/null)"; [ -n "$_en" ] || _en="?"
+  _card="${_d##*/}"; _conn="$_card"; _card="${_card%%-*}"
+  _v="$(cat "/sys/class/drm/$_card/device/vendor" 2>/dev/null)"
+  case "$_v" in 0x10de) _v=nvidia ;; 0x1002) _v=amd ;; 0x8086) _v=intel ;; *) : ;; esac
+  echo "  connector $_conn: $_st/$_en${_v:+ (vendor $_v)}"
+done
+unset _d _st _en _card _conn _v
+if OUTGPU="$(ak_output_gpu_vendor)"; then
+  ok "output GPU: $OUTGPU — drives the active display ('auto' picks it)"
 else
-  echo "note: display GPU unknown (glxinfo missing) — RPGMaker GPU check skipped"
+  echo "note: output GPU unknown — the loader default is used"
+fi
+if DISPGPU="$(ak_display_gpu_vendor)"; then
+  ok "X11/GLX renderer: $DISPGPU"
+else
+  echo "note: X11/GLX renderer unknown (glxinfo missing)"
 fi
 
 # 5. Runner backends.

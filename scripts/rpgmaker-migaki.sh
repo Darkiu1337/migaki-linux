@@ -162,7 +162,7 @@ if [ "$ENGINE" != "rpgmaker-mv" ]; then
     echo "rpgmaker-linux --gamepath '$GAMEPATH'"
     exit 0
   fi
-  set -x
+  [ "${MIGAKI_DEBUG:-0}" = "1" ] && set -x
   # NOTE: no exec so future traps survive; nothing shared is modified on this path.
   rpgmaker-linux --gamepath "$GAMEPATH"
   exit $?
@@ -183,17 +183,18 @@ rm -f "$HOME/.config/RPG Maker MV/MZ (cicpoffs mount)/Singleton"* 2>/dev/null ||
 export XDG_SESSION_TYPE=x11
 case "${GPU:-auto}" in
   nvidia|amd|intel)
-    # Chromium/ANGLE-Vulkan only works on X11 ozone here, and X11 belongs to a
-    # single GPU: a forced GPU other than the display one cannot present a
-    # swapchain (its GPU process fails vkCreateSwapchainKHR, the game drops to
-    # Canvas2D — no filter, no overlay, no WebGL). Use the display GPU unless
-    # explicitly forced.
-    _disp="$(ak_display_gpu_vendor || true)"
-    if [ -z "${MIGAKI_FORCE_GPU:-}" ] && [ -n "$_disp" ] && [ "$_disp" != "$GPU" ]; then
-      ak_log "warning: '$GPU' cannot present this Chromium/Vulkan window — X11 is on '$_disp'."
-      ak_log "         forcing it drops the filter, the overlay and WebGL."
-      ak_log "         using the display GPU ($_disp); set MIGAKI_FORCE_GPU=1 to override."
-      GPU="$_disp"
+    # Honor the pick: on a hybrid laptop the active output may hang off a GPU
+    # other than the one X11/XWayland renders with (here HDMI is on the dGPU
+    # while the compositor is on the iGPU), and both can present. Only a manual
+    # MIGAKI_FORCE_GPU forces the GLX/display vendor instead.
+    _glx="$(ak_display_gpu_vendor || true)"
+    if [ -n "${MIGAKI_FORCE_GPU:-}" ] && [ -n "$_glx" ] && [ "$_glx" != "$GPU" ]; then
+      ak_log "MIGAKI_FORCE_GPU: using the display GPU ($_glx) instead of $GPU."
+      GPU="$_glx"
+    elif ! ak_present_gpu_vendors | grep -qx "$GPU"; then
+      ak_log "note: '$GPU' drives no active output and is not the X11 renderer (${_glx:-unknown})."
+      ak_log "      launching on '$GPU' as requested; if the window can't present, switch"
+      ak_log "      the pick, or set MIGAKI_FORCE_GPU=1 to force ${_glx:-the display GPU}."
     fi
     if _icd="$(ak_icd_file "$GPU")"; then
       export VK_ICD_FILENAMES="$_icd"
@@ -201,9 +202,18 @@ case "${GPU:-auto}" in
       ak_log "warning: no $GPU Vulkan ICD found; using the loader default"
       unset VK_ICD_FILENAMES
     fi
-    unset _icd _disp
+    unset _icd _glx
     ;;
-  auto) unset VK_ICD_FILENAMES ;;
+  auto)
+    # Prefer the GPU that owns the active output, not the boot/loader default.
+    if _agpu="$(ak_output_gpu_vendor)" && _icd="$(ak_icd_file "$_agpu")"; then
+      ak_log "auto GPU: $_agpu (owns the active output)"
+      export VK_ICD_FILENAMES="$_icd"
+    else
+      unset VK_ICD_FILENAMES
+    fi
+    unset _agpu _icd
+    ;;
   *) ak_die "--gpu needs nvidia, amd, intel or auto" ;;
 esac
 ak_vkbasalt_env "$VARIANT"
@@ -225,7 +235,7 @@ if [ "$DRYRUN" = "1" ]; then
   exit 0
 fi
 
-set -x
+[ "${MIGAKI_DEBUG:-0}" = "1" ] && set -x
 # No exec (EXIT trap restores the template); clear stale NW.js runtimes first
 # or a single-instance stale process would hijack this launch.
 ak_kill_strays "nw --ozone-platform"

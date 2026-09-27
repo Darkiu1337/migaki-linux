@@ -30,17 +30,16 @@ Dialog {
         return name + (isDisplayGpu(name) ? "  (display)" : "")
     }
     function isDisplayGpu(name) {
-        var dv = backend.displayGpuVendor()
-        return dv !== "" && backend.gpuVendor(name) === dv
+        return backend.isDisplayGpu(name)
     }
     function gpuMismatch() {
         if (root.runner !== "rpgmaker")
             return false
-        var dv = backend.displayGpuVendor()
-        if (dv === "")
-            return false
         var v = backend.gpuVendor(gpuCombo.currentText)
-        return v !== "" && v !== dv
+        // Warn only when the pick can neither drive an active output nor is
+        // the X11 renderer (a dGPU driving the monitor is fine, even when the
+        // compositor renders on the iGPU).
+        return v !== "" && !backend.isDisplayGpu(gpuCombo.currentText)
     }
 
     function setRunner(k) {

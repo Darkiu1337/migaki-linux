@@ -265,6 +265,7 @@ class GuiBackend(QObject):
         # stale cache warms lazily on the first listGpus() call.
         self._gpus, self._gpu_stale = system.gpu_cache(fingerprint=self._gpu_fp)
         self._display_vendor = None
+        self._present_vendors = None
         self._timer = QTimer(self)
         self._timer.timeout.connect(self.poll_bridge)
         self._timer.start(3000)
@@ -434,6 +435,15 @@ class GuiBackend(QObject):
     @Slot(str, result=str)
     def gpuVendor(self, name):
         return commands.gpu_vendor(name)
+
+    @Slot(str, result=bool)
+    def isDisplayGpu(self, name):
+        """True when this GPU name can present a window: it owns an active
+        output or is the GLX renderer. Cached once per session."""
+        if self._present_vendors is None:
+            self._present_vendors = system.present_gpu_vendors()
+        v = commands.gpu_vendor(name)
+        return bool(v) and v in self._present_vendors
 
     def warm_gpus(self):
         if self._gpu_warming:

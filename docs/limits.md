@@ -56,8 +56,15 @@ separate filter device. Pick per game based on where you want the heat.
 Defaults: the proton runner auto-selects the discrete GPU when one is
 detectable (`--dry-run` prints the choice; `--dxvk-device auto` forces the
 loader default, an explicit name overrides). The rpgmaker/native runners
-take `--gpu nvidia|amd|auto`. (A missed filter on a 32-bit title is a
+take `--gpu nvidia|amd|intel|auto`. (A missed filter on a 32-bit title is a
 WoW64-mode issue, not a GPU one — see the proton table above.)
+
+On a hybrid laptop the GPU that drives the **active output** can differ from
+the one X11/XWayland renders with (e.g. HDMI wired to the dGPU while the
+compositor runs on the iGPU). Both can present a window, so an explicit
+`--gpu` pick is honored as given; `auto` prefers the output-driving GPU, and
+only a manual `MIGAKI_FORCE_GPU=1` forces the GLX/display renderer. `migaki
+doctor` prints the connector→GPU map so a wrong pick is explainable.
 
 Run `migaki doctor` on a new machine to verify the whole chain (manifest,
 library, shaders, GPU, runner backends, 32-bit/WoW64 posture, translation

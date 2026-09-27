@@ -104,6 +104,19 @@ def display_gpu_vendor():
     return ""
 
 
+def output_gpu_vendor():
+    """Vendor of the GPU that owns an active DRM output ('nvidia'|'amd'|
+    'intel'), or '' — distinct from the GLX/XWayland renderer on a hybrid
+    laptop whose monitor hangs off the dGPU."""
+    return _bash_call("ak_output_gpu_vendor")
+
+
+def present_gpu_vendors():
+    """Vendors that can legitimately present a window: the GPUs driving an
+    active output plus the GLX/XWayland renderer."""
+    return [v for v in _bash_call("ak_present_gpu_vendors").splitlines() if v]
+
+
 def gpu_fingerprint():
     """Cheap hardware fingerprint (vendor:device per DRM card) used to
     invalidate the cached GPU list on a GPU add/remove/swap. Reads sysfs
