@@ -87,11 +87,27 @@ cmd_add() {
       runner="$_drunner"
     fi
   fi
-  if [ "$runner" = "rpgmaker" ] && [ ! -d "$path" ] && [ -d "$_droot" ]; then
-    echo "rpgmaker needs the game folder: using $_droot instead of $path"
-    path="$_droot"
+  # Reconcile the pick: point the runner at a real launch target (Ren'Py
+  # native -> the .sh, rpgmaker -> the folder) and catch a Windows .exe under
+  # the native runner (Ren'Py-without-Linux routes to proton; anything else
+  # warns and offers the switch).
+  _rec="$(ak_reconcile "$path" "$runner")"
+  _rrunner="${_rec%%|*}"; _rest="${_rec#*|}"
+  _rtarget="${_rest%%|*}"; _rest="${_rest#*|}"
+  _rsev="${_rest%%|*}"; _rmsg="${_rest#*|}"
+  if [ "$_rsev" = "warn" ]; then
+    echo "$_rmsg"
+    if gum confirm "Switch runner to proton?"; then runner="proton"; fi
+  elif [ "$_rrunner" != "$runner" ]; then
+    echo "$_rmsg"
+    runner="$_rrunner"
   fi
-  unset _det _eng _r1 _drunner _r2 _dconf _r3 _droot _ddetail
+  if [ -n "$_rtarget" ] && [ "$_rtarget" != "$path" ]; then
+    echo "launch target: using $_rtarget"
+    path="$_rtarget"
+  fi
+  unset _det _eng _r1 _drunner _r2 _dconf _r3 _droot _ddetail \
+        _rec _rest _rrunner _rtarget _rsev _rmsg
   variant="$(gum choose --header "Filter (Restore 2D / Clear 3D)" \
     "L — strongest, highest GPU cost" \
     "M — balanced" \
@@ -270,6 +286,7 @@ cmd_detect() {
   echo "confidence: $conf"
   echo "root:       $root"
   echo "detail:     $detail"
+  echo "launch:     $(ak_launch_target "$1")"
 }
 
 usage() {

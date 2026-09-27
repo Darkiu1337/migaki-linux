@@ -61,7 +61,15 @@ if [ -z "$EXE" ]; then
   EXE="$(ak_pick_file 'Select game executable' '')"
   [ -n "$EXE" ] || ak_die "no game selected"
 fi
-[ -f "$EXE" ] || ak_die "game not found: $EXE"
+[ -e "$EXE" ] || ak_die "game not found: $EXE"
+# Resolve the real launch target: a Ren'Py distro handed to us as a Windows
+# .exe (or as its folder) becomes the Linux .sh launcher.
+if _tgt="$(ak_launch_target "$EXE")" && [ -n "$_tgt" ] && [ "$_tgt" != "$EXE" ]; then
+  ak_log "resolved launch target: $_tgt"
+  EXE="$_tgt"
+fi
+unset _tgt
+[ -f "$EXE" ] || ak_die "not a runnable file: $EXE"
 [ -x "$EXE" ] || ak_log "warning: '$EXE' is not marked executable, trying anyway"
 case "$GLMODE" in
   zink|auto) ;;
@@ -90,7 +98,17 @@ if [ "$DRYRUN" = "1" ]; then
   exit 0
 fi
 
-set -x
+# A Windows binary can never exec here; fail with guidance, not "Exec format
+# error" from the kernel (which confused a native-runner-on-a-.exe pick).
+if ak_is_windows_pe "$EXE"; then
+  ak_die "'$(basename "$EXE")' is a Windows executable — the native runner only runs Linux binaries. Pick the game's .sh launcher, or use the proton runner."
+fi
+# Trace only on request (it floods the GUI run log otherwise).
+[ "${MIGAKI_DEBUG:-0}" = "1" ] && set -x
 # Relaunch means takeover: clear surviving processes of this same game first.
+# A Ren'Py .sh re-execs the same-stem engine binary, so match the stem too.
 ak_kill_strays "$(basename "$EXE")"
+case "$EXE" in
+  *.sh) ak_kill_strays "$(basename "${EXE%.sh}")" ;;
+esac
 exec "$EXE" "${ARGS[@]}"

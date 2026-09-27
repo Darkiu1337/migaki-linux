@@ -7,6 +7,15 @@ def slugify(name):
     return slug or "game"
 
 
+def _is_pe(path):
+    """True when the file starts with the PE/Windows magic ("MZ")."""
+    try:
+        with open(path, "rb") as f:
+            return f.read(2) == b"MZ"
+    except OSError:
+        return False
+
+
 def validate_entry(data):
     """None when valid, else a user-facing reason string."""
     if not data.get("path") or not os.path.exists(data["path"]):
@@ -14,6 +23,11 @@ def validate_entry(data):
     if data.get("runner") == "rpgmaker" and not os.path.isdir(data["path"]):
         return ("The rpgmaker runner needs the game folder, not a file.\n"
                 "Use Detect (or pick the folder containing www/).")
+    if (data.get("runner") == "native" and os.path.isfile(data["path"])
+            and _is_pe(data["path"])):
+        return ("That's a Windows .exe — the native runner only runs Linux "
+                "binaries.\nPick the game's .sh launcher, or use the proton "
+                "runner.")
     return None
 
 

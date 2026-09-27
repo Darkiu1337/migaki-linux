@@ -233,21 +233,47 @@ def list_protons():
     return out
 
 
+def _bash_call(func, *args):
+    """Run a scripts/migaki-lib.sh helper, returning its stdout (stripped) or
+    "" when it cannot run. Never raises."""
+    lib = os.path.join(paths.SCRIPTS_DIR, "migaki-lib.sh")
+    try:
+        out = subprocess.run(
+            ["bash", "-c", f'source "{lib}" && {func} "$@"', func, *args],
+            capture_output=True, text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return out
+
+
 def detect(path):
     """Engine detection; wraps the proven bash implementation in
     scripts/migaki-lib.sh. Returns (engine, runner, confidence, root, detail)
     or None when detection fails to run/returns garbage."""
-    lib = os.path.join(paths.SCRIPTS_DIR, "migaki-lib.sh")
-    try:
-        out = subprocess.run(
-            ["bash", "-c", f'source "{lib}" && ak_detect_engine "$0"', path],
-            capture_output=True, text=True, timeout=30).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        return None
-    parts = out.split("|", 4)
+    parts = _bash_call("ak_detect_engine", path).split("|", 4)
     if len(parts) != 5:
         return None
     return tuple(parts)
+
+
+def launch_target(path):
+    """The exact path a runner should be pointed at: the Linux .sh for a
+    native Ren'Py distro, the game folder for rpgmaker, the main .exe for a
+    Windows build. Falls back to `path` when nothing is recognizable."""
+    return _bash_call("ak_launch_target", path) or path
+
+
+def reconcile(path, runner):
+    """Reconcile a chosen (path, runner), returning
+    {'runner', 'target', 'severity', 'message'}. Points the runner at a
+    launchable target and routes a native-runner-on-a-Windows-exe mistake to
+    proton (or warns when the .exe isn't a Ren'Py title)."""
+    parts = _bash_call("ak_reconcile", path, runner).split("|", 3)
+    if len(parts) != 4:
+        return {"runner": runner, "target": path, "severity": "ok",
+                "message": ""}
+    return {"runner": parts[0], "target": parts[1],
+            "severity": parts[2], "message": parts[3]}
 
 
 def translate_engine(path):

@@ -19,6 +19,8 @@ Dialog {
     property string runner: "proton"
     // Remembered GPU pick so a late gpusChanged refresh can restore it.
     property string wantedGpu: ""
+    // "ok" | "info" | "warn" — tints the detect label and reveals the switch.
+    property string detectSeverity: "ok"
 
     ButtonGroup { id: runnerGroup }
 
@@ -39,6 +41,44 @@ Dialog {
             return false
         var v = backend.gpuVendor(gpuCombo.currentText)
         return v !== "" && v !== dv
+    }
+
+    function setRunner(k) {
+        root.runner = k
+        for (var i = 0; i < root.runnerKeys.length; i++)
+            runnerRepeater.itemAt(i).checked = (root.runnerKeys[i] === k)
+    }
+
+    // A path was chosen (picker/paste). Keep the runner honest: a Windows .exe
+    // under the native runner is corrected here.
+    function pathChosen(p) {
+        pathField.text = p
+        backend.rememberDir(p)
+        if (root.runner === "native")
+            reconcileSelection("")
+    }
+
+    // Reconcile the current (path, runner): resolve the real launch target and
+    // move a Windows .exe off the native runner. Drives Detect and path picks.
+    function reconcileSelection(preface) {
+        preface = preface || ""
+        var r
+        try { r = JSON.parse(backend.reconcileSelection(pathField.text.trim(), root.runner)) }
+        catch (e) { r = null }
+        if (!r) {
+            if (preface !== "") detectLabel.text = preface
+            return
+        }
+        if (r.runner !== root.runner)
+            setRunner(r.runner)
+        if (r.target !== "" && r.target !== pathField.text)
+            pathField.text = r.target
+        root.detectSeverity = r.severity
+        if (r.message !== "" || preface !== "") {
+            var line = r.message
+            if (preface !== "") line = line === "" ? preface : (preface + " " + line)
+            detectLabel.text = line
+        }
     }
 
     Connections {
@@ -105,6 +145,7 @@ Dialog {
             hookerCheck.checked = tr.show_hooker === "1"
         }
         errLabel.text = ""
+        root.detectSeverity = "ok"
         pages.currentIndex = 0
         root.open()
     }
@@ -153,10 +194,8 @@ Dialog {
         nameFilters: ["Windows executables (*.exe *.EXE)", "All files (*)"]
         onAccepted: {
             var p = backend.fileUrlToPath(exePicker.selectedFile)
-            if (p !== "") {
-                pathField.text = p
-                backend.rememberDir(p)
-            }
+            if (p !== "")
+                root.pathChosen(p)
         }
     }
 
@@ -165,10 +204,8 @@ Dialog {
         title: "Select RPGMaker game folder"
         onAccepted: {
             var p = backend.fileUrlToPath(dirPicker.selectedFolder)
-            if (p !== "") {
-                pathField.text = p
-                backend.rememberDir(p)
-            }
+            if (p !== "")
+                root.pathChosen(p)
         }
     }
 
@@ -177,7 +214,7 @@ Dialog {
         target: backend
         function onPathPicked(kind, path) {
             if (path !== "")
-                pathField.text = path
+                root.pathChosen(path)
         }
     }
 
@@ -305,33 +342,43 @@ Dialog {
                                 onClicked: {
                                     var res = backend.detect(pathField.text)
                                     if (res === "") {
+                                        root.detectSeverity = "warn"
                                         detectLabel.text = "Detection failed to run."
                                         return
                                     }
                                     var parts = res.split("|")
-                                    var r = parts[1], conf = parts[2], rroot = parts[3], detail = parts[4]
+                                    var r = parts[1], conf = parts[2], detail = parts[4]
+                                    var preface = ""
                                     if ((conf === "high" || conf === "medium") && root.runnerKeys.indexOf(r) >= 0) {
-                                        root.runner = r
-                                        for (var i = 0; i < root.runnerKeys.length; i++)
-                                            runnerRepeater.itemAt(i).checked = (root.runnerKeys[i] === r)
-                                        if (r === "rpgmaker" && !backend.isDir(pathField.text) && backend.isDir(rroot)) {
-                                            pathField.text = rroot
-                                            detectLabel.text = "Detected: " + detail + " → runner '" + r + "' (" + conf + "). Path set to game folder."
-                                        } else {
-                                            detectLabel.text = "Detected: " + detail + " → runner '" + r + "' (" + conf + " confidence)."
-                                        }
+                                        setRunner(r)
+                                        preface = "Detected: " + detail + " → runner '" + r + "' (" + conf + ")."
                                     } else {
-                                        detectLabel.text = "Detected: " + detail + " (confidence: " + conf + ") — pick the runner manually."
+                                        preface = "Detected: " + detail + " (confidence: " + conf + ") — pick the runner manually."
                                     }
+                                    reconcileSelection(preface)
                                 }
                             }
                         }
-                        Label {
-                            id: detectLabel
-                            text: "Tip: Detect fills in the runner from the previous page."
-                            opacity: 0.7
-                            wrapMode: Text.Wrap
+                        RowLayout {
                             Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                id: detectLabel
+                                text: "Tip: Detect fills in the runner from the previous page."
+                                opacity: root.detectSeverity === "warn" ? 1.0 : 0.7
+                                color: root.detectSeverity === "warn" ? "#e5a50a" : palette.text
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                            Btn {
+                                text: "Switch to Proton"
+                                visible: root.detectSeverity === "warn" && root.runner === "native"
+                                onClicked: {
+                                    setRunner("proton")
+                                    root.detectSeverity = "ok"
+                                    detectLabel.text = "Runner set to proton."
+                                }
+                            }
                         }
                     }
                 }

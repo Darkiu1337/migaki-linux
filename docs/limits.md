@@ -131,6 +131,8 @@ anything else asks with the suggestion pre-selected.
 | `*.pck` + exe / ELF | godot | proton / native |
 | `resources/*.asar` + `.exe` | electron | proton (experimental) |
 | `tyrano/` + `data/` + `index.html` | tyrano | rpgmaker (filter unlikely) |
+| `*.AppImage` | appimage | native |
+| lone `.exe` / ELF / nothing recognizable | exe / elf / unknown | proton / native / ask |
 
 `electron`/`tyrano` are the translation **CDP DOM hook** case and
 `rpgmaker-mv` (MV/MZ on the normal NW.js build) is the **injected page hook**
@@ -138,11 +140,18 @@ case (`docs/translate.md`): Chromium never calls GDI, so Textractor cannot hook
 them. `vn-launch.sh` auto-selects `tyrano_hook.py`; the rpgmaker runner injects
 `rpgmaker_hook.js` + the `:6677` relay. Everything else hooks with Textractor,
 x86/x64 by the exe's PE bitness.
-| `*.AppImage` | appimage | native |
-| lone `.exe` / ELF / nothing recognizable | exe / elf / unknown | proton / native / ask |
 
 Helper executables (`UnityCrashHandler*`, `nwjc*`, `payload*`,
 uninstallers, redist installers…) are never mistaken for the game.
+
+Detect resolves the concrete **launch target**, not just the runner: a native
+Ren'Py distro is pointed at its Linux `.sh` launcher (never the Windows `.exe`),
+rpgmaker at the game folder, and a Windows build at its main `.exe`. A `.exe`
+picked under the native runner is caught — a Ren'Py title **with** a Linux
+runtime keeps native (and points at the `.sh`); without one it is routed to
+proton automatically; a non-Ren'Py `.exe` warns and offers the proton switch.
+The runners resolve the same target at launch, so an already-saved wrong path
+self-heals rather than dying with the kernel's `Exec format error`.
 
 ## Game language (`--lang`, Proton/native)
 

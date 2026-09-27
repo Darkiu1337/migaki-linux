@@ -841,3 +841,164 @@ ak_detect_engine() {
   printf 'unknown|ask|low|%s|no recognizable game markers' "$dir"
   return 0
 }
+
+# True when the file is a Windows PE (starts with the "MZ" magic). Reads only
+# the first two bytes, so a multi-GB .exe costs nothing.
+ak_is_windows_pe() {
+  local magic
+  [ -f "${1:-}" ] || return 1
+  magic="$(head -c 2 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')"
+  [ "$magic" = "4d5a" ]
+}
+
+# Ren'Py distro helper: prints the Linux launcher (.sh) for a distro dir, or
+# nothing when the distro cannot actually run natively. Requires the Ren'Py
+# layout, an executable .sh (preferring the one whose stem pairs with a sibling
+# .py — Ren'Py's own naming), AND a lib/<platform>/ engine binary. A distro
+# that ships a .sh but no Linux payload (Windows-only build) fails here.
+ak_renpy_launcher() {
+  local dir="$1" sh="" stem py found eng lib plat
+  [ -d "$dir/renpy" ] && [ -d "$dir/game" ] || return 1
+  for py in "$dir"/*.py; do
+    [ -f "$py" ] || continue
+    stem="$(basename "$py" .py)"
+    if [ -f "$dir/$stem.sh" ] && [ -x "$dir/$stem.sh" ]; then
+      sh="$dir/$stem.sh"; break
+    fi
+  done
+  if [ -z "$sh" ]; then
+    for found in "$dir"/*.sh; do
+      [ -f "$found" ] && [ -x "$found" ] && { sh="$found"; break; }
+    done
+  fi
+  [ -n "$sh" ] || return 1
+  stem="$(basename "$sh" .sh)"
+  for plat in linux-x86_64 linux-i686 linux-aarch64 linux-armv7l; do
+    lib="$dir/lib/$plat"
+    [ -d "$lib" ] || continue
+    [ -x "$lib/$stem" ] && { printf '%s' "$sh"; return 0; }
+    for eng in "$lib"/*; do
+      [ -x "$eng" ] && [ ! -d "$eng" ] && { printf '%s' "$sh"; return 0; }
+    done
+  done
+  return 1
+}
+
+# The exact path a runner should be pointed at for a game: resolves the detected
+# engine's real launch target (Ren'Py native -> the Linux .sh; rpgmaker/tyrano
+# -> the game folder; Windows engines -> the main .exe). Prints the input
+# unchanged when the layout is unrecognized. Never fails.
+ak_launch_target() {
+  local target="$1" det engine root t
+  [ -n "$target" ] || { printf '%s' ""; return 0; }
+  det="$(ak_detect_engine "$target")"
+  engine="${det%%|*}"; det="${det#*|}"   # runner
+  det="${det#*|}"; det="${det#*|}"        # confidence, then root
+  root="${det%%|*}"
+  case "$engine" in
+    renpy-native)
+      t="$(ak_renpy_launcher "$root")" || t=""
+      printf '%s' "${t:-$target}"; return 0 ;;
+    rpgmaker-mv|tyrano)
+      printf '%s' "$root"; return 0 ;;
+    renpy-windows|unity-windows|rpgmaker-xp|kirikiri|electron|godot-windows|exe)
+      t="$(ak_main_exe "$root")"
+      [ -n "$t" ] || t="$target"
+      printf '%s' "${t:-$target}"; return 0 ;;
+    unity-linux|appimage|elf)
+      if [ -f "$target" ] && [ -x "$target" ]; then printf '%s' "$target"; return 0; fi
+      t="$(find "$root" -maxdepth 1 -name '*.AppImage' 2>/dev/null | head -n 1)"
+      if [ -z "$t" ]; then
+        for t in "$root"/*; do
+          if [ -f "$t" ] && [ -x "$t" ] && [ "${t##*.}" != "exe" ]; then break; fi
+          t=""
+        done
+      fi
+      printf '%s' "${t:-$target}"; return 0 ;;
+    *)
+      printf '%s' "$target"; return 0 ;;
+  esac
+}
+
+# Reconcile a chosen (path, runner): point the runner at a launchable target
+# and catch the native-runner-on-a-Windows-exe mistake. For a Ren'Py title the
+# runner is kept on native only when a Linux runtime exists; otherwise it is
+# routed to proton. A non-Ren'Py .exe under native warns (the caller offers the
+# proton switch). Prints: runner|target|severity|message  (severity ok|info|warn)
+ak_reconcile() {
+  local path="$1" runner="$2" det engine conf root detail
+  local target="$path" out_runner="$runner" sev="ok" msg=""
+
+  [ -n "$path" ] || { printf '%s|%s|warn|%s' "$runner" "$path" "No path given."; return 0; }
+  if [ ! -e "$path" ]; then
+    printf '%s|%s|warn|%s' "$runner" "$path" "Path does not exist."
+    return 0
+  fi
+
+  det="$(ak_detect_engine "$path")"
+  IFS='|' read -r engine _ conf root detail <<<"$det"
+
+  case "$runner" in
+    native)
+      # Anything that isn't a runnable Linux file belongs on proton for Ren'Py,
+      # and is a mistake for other Windows engines.
+      local pe=0
+      if [ -f "$path" ] && ak_is_windows_pe "$path"; then
+        pe=1
+        target="$path"
+      else
+        target="$(ak_launch_target "$path")"
+        [ -n "$target" ] || target="$path"
+        if [ -f "$target" ] && ak_is_windows_pe "$target"; then pe=1; fi
+      fi
+      if [ "$pe" = "1" ] || [ ! -f "$target" ]; then
+        case "$engine" in
+          renpy-native)
+            local sh
+            sh="$(ak_renpy_launcher "$root")" || sh=""
+            if [ -n "$sh" ]; then
+              target="$sh"; sev="info"
+              msg="Ren'Py title with a Linux runtime — using $(basename "$target")."
+            else
+              out_runner="proton"; target="$(ak_main_exe "$root")"
+              [ -n "$target" ] || target="$path"
+              sev="info"; msg="Ren'Py build without a Linux runtime — routed to the proton runner."
+            fi ;;
+          renpy-windows|renpy-unknown)
+            out_runner="proton"; target="$(ak_main_exe "$root")"
+            [ -n "$target" ] || target="$path"
+            sev="info"; msg="Ren'Py Windows-only build — routed to the proton runner." ;;
+          *)
+            if [ "$pe" = "1" ]; then
+              sev="warn"
+              msg="That's a Windows .exe — the native runner only runs Linux binaries, so it won't launch. Switch to the proton runner."
+            else
+              sev="warn"
+              msg="No Linux executable found here — point the native runner at the game's launcher, or use the proton runner."
+            fi ;;
+        esac
+      elif [ "$target" != "$path" ]; then
+        sev="info"; msg="Using $(basename "$target")."
+      fi ;;
+    rpgmaker)
+      # rpgmaker always consumes the game folder.
+      if [ ! -d "$path" ] && [ -d "$root" ]; then
+        target="$root"; sev="info"
+        msg="rpgmaker needs the game folder — using $(basename "$target")."
+      else
+        target="$path"
+      fi ;;
+    *)
+      # proton (and anything else) runs a Windows executable: keep a .exe as
+      # given; a folder resolves to its main .exe.
+      if [ ! -f "$path" ]; then
+        target="$(ak_main_exe "$path")"
+        [ -n "$target" ] || target="$path"
+        if [ "$target" != "$path" ]; then
+          sev="info"; msg="Using $(basename "$target")."
+        fi
+      fi ;;
+  esac
+
+  printf '%s|%s|%s|%s' "$out_runner" "$target" "$sev" "$msg"
+}

@@ -308,10 +308,19 @@ class GuiBackend(QObject):
 
     @Slot(str, result=str)
     def detect(self, path):
-        res = system.detect(path.strip())
+        p = path.strip()
+        res = system.detect(p)
         if res is None:
             return ""
-        return "|".join(res)
+        # 6th field: the concrete launch target (the .sh for a native Ren'Py
+        # distro, the folder for rpgmaker, the main .exe for Windows).
+        target = system.launch_target(p) if p else ""
+        return "|".join(res) + "|" + target
+
+    @Slot(str, str, result=str)
+    def reconcileSelection(self, path, runner):
+        """JSON {runner,target,severity,message} for a chosen (path, runner)."""
+        return json.dumps(system.reconcile(path.strip(), runner))
 
     @Slot(str, result=str)
     def validateGame(self, data_json):
