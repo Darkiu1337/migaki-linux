@@ -87,7 +87,7 @@ The runtime libraries the shipped binary links are `libxkbcommon.so.0`,
 checks them and installs the packages above.
 
 `install.sh` never compiles anything: it downloads the prebuilt
-`migaki-gui-x86_64` from the pinned `gui-v1` release and verifies its sha256.
+`migaki-gui-x86_64` from the pinned `gui-v2` release and verifies its sha256.
 Rust is only needed by developers who want a local build
 (`cargo build --release` in `gui/`, which additionally needs `pkg-config`,
 `libxkbcommon-dev`/`-devel` and `libxcb1-dev`/`libxcb-devel`).
