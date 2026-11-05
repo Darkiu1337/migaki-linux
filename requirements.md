@@ -68,29 +68,33 @@ Vulkan headers**:
 
 `install.sh` builds into `~/.local` and records `layer_dir` in `config.json`.
 
-## GUI (PySide6 + Qt Quick)
+## GUI (Rust + gpui)
 
-The launcher GUI and the translation textbox are both Qt Quick (QML). Prefer
-the system package; the app follows the desktop via the KDE colour scheme
-(kdeglobals) and the Quick Controls style below:
+The launcher GUI is a Rust binary (`gui/`, gpui 0.2.2) that speaks NDJSON to
+`bridge/main.py`; it needs no Qt. Runtime libraries: `libxkbcommon`, `libxcb`
+(+ `libxcb-xkb`) and a working Vulkan driver/loader (the same one gamescope and
+the filter already require). Building from source additionally needs a Rust
+toolchain (edition 2024, stable ≥ 1.85).
 
-| Distro | Install |
+| Distro | Build + runtime |
 |---|---|
-| Arch | `sudo pacman -S pyside6` |
-| Debian / Ubuntu / Fedora | `pip install PySide6` (bundled Qt) — the installer does this |
+| Arch | `sudo pacman -S rust libxkbcommon libxcb` |
+| Debian / Ubuntu | `sudo apt install build-essential libxkbcommon-dev libxkbcommon-x11-0 libxcb1-dev` |
+| Fedora | `sudo dnf install gcc gcc-c++ libxkbcommon libxkbcommon-x11 libxcb-devel` |
 
-QML modules needed: `QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts` (screens),
-`QtQuick.Dialogs` (file/font/color pickers) and `QtQuick.Effects` (text shadow).
-Arch: `qt6-declarative`; Debian/Ubuntu:
-`qml6-module-qtquick{,-controls,-layouts,-dialogs,-effects}`; Fedora:
-`qt6-qtdeclarative`. (`pip install PySide6` bundles them.)
+`install.sh` runs `cargo build --release` in `gui/` (first build takes a few
+minutes) or, when cargo is unavailable, downloads the pinned `gui-v1` release
+asset `migaki-gui-x86_64` into `gui/bin/`. It installs `~/.local/bin/migaki-gui`
+as a wrapper that exports `MIGAKI_ROOT`, and with `--desktop` a
+`migaki-gui.desktop` entry (`StartupWMClass=migaki`). `gui-release.yml` publishes
+that asset from a `gui-v*` tag.
 
-The GUI and textbox use the **KDE Quick Controls style** (`org.kde.desktop`) so
-both follow your desktop colour scheme (e.g. Omarchy's `kdeglobals` theme) and
-light/dark automatically. Arch: `qqc2-desktop-style`; Debian/Ubuntu:
-`qqc2-desktop-style`; Fedora: `kf6-qqc2-desktop-style`. Without it they fall
-back to Fusion. The GUI font defaults to your environment font (e.g.
-qt6ct/KDE) and can be overridden per-app in Settings.
+The GUI reads omarchy's live theme files
+(`~/.local/state/omarchy/current/theme/{colors,shell}.toml`) at start and repolls
+them every 2 s, honours `gui.font` / `gui.font_size` from config.json, and has
+no in-app theme switch. `migaki-gui --diagnose` prints the checkout root,
+python, theme directory and bridge log, then runs `--self-test` (spawn the
+bridge, print its snapshot).
 
 The top-bar **Settings** dialog also has a Proton picker
 (`core.system.list_protons()`): it lists the builds under the common
@@ -99,9 +103,27 @@ a build without new WoW64 support is flagged and falls back to UMU-Proton at
 launch. The picker stores an **absolute path** in `proton` (`""` = umu-managed);
 `install.sh` seeds the verified build's path, and a bare or stale value is
 resolved by name — otherwise the runner falls back to UMU-Proton. `migaki
-doctor` validates that the configured Proton resolves. There is no in-app
-theme switch. `migaki-gui --diagnose` prints the resolved style, font and
-palette, and `--self-test` loads the whole UI headlessly (see README).
+doctor` validates that the configured Proton resolves.
+
+## Textbox (PySide6 + Qt Quick)
+
+Only the translation textbox (`translate/textbox.py` + `translate/qml/`) is
+still Qt Quick. Prefer the system package:
+
+| Distro | Install |
+|---|---|
+| Arch | `sudo pacman -S pyside6` |
+| Debian / Ubuntu / Fedora | `pip install PySide6` (bundled Qt) — the installer does this |
+
+QML modules needed: `QtQuick`, `QtQuick.Controls`, `QtQuick.Layouts`,
+`QtQuick.Dialogs` and `QtQuick.Effects` (text shadow). Arch: `qt6-declarative`;
+Debian/Ubuntu: `qml6-module-qtquick{,-controls,-layouts,-dialogs,-effects}`;
+Fedora: `qt6-qtdeclarative`. (`pip install PySide6` bundles them.)
+
+The textbox uses the **KDE Quick Controls style** (`org.kde.desktop`) so it
+follows your desktop colour scheme (e.g. Omarchy's `kdeglobals` theme). Arch:
+`qqc2-desktop-style`; Debian/Ubuntu: `qqc2-desktop-style`; Fedora:
+`kf6-qqc2-desktop-style`. Without it it falls back to Fusion.
 
 ## VN translation (translate/)
 

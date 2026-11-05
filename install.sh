@@ -258,6 +258,59 @@ download_asset() {
   curl -L --retry 3 --retry-all-errors --max-time 300 \
     -o "$dest/$asset" "https://github.com/$repo/releases/download/$tag/$asset"
 }
+# gpui GUI binary: built by .github/workflows/gui-release.yml and published as
+# a release asset. A local cargo build wins; the asset is the fallback.
+MIGAKI_REPO="${MIGAKI_REPO:-Darkiu1337/migaki-linux}"
+GUI_TAG="${GUI_RELEASE_TAG:-gui-v1}"
+GUI_ASSET="migaki-gui-x86_64"
+GUI_BIN=""
+
+gui_binary_path() {
+  local cand
+  for cand in "$ROOT/gui/bin/$GUI_ASSET" "$ROOT/gui/target/release/migaki-gui"; do
+    if [ -x "$cand" ]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Sets GUI_BIN (existing build, then a local cargo build, then the pinned
+# release asset). Returns 1 when no runnable binary is available.
+ensure_gui_binary() {
+  if GUI_BIN="$(gui_binary_path)"; then
+    return 0
+  fi
+  [ "$CHECK_ONLY" = "1" ] || [ "$DRY_RUN" = "1" ] && return 1
+  if command -v cargo >/dev/null 2>&1; then
+    note "building the gpui GUI (cargo build --release; first build takes a while)"
+    if ( cd "$ROOT/gui" && cargo build --release ); then
+      GUI_BIN="$(gui_binary_path)" && return 0
+    fi
+    note "cargo build failed — falling back to the prebuilt release asset"
+  fi
+  mkdir -p "$ROOT/gui/bin"
+  local url="https://github.com/$MIGAKI_REPO/releases/download/$GUI_TAG/$GUI_ASSET"
+  local part="$ROOT/gui/bin/$GUI_ASSET.part"
+  if curl -Lf --retry 3 --retry-all-errors --max-time 600 -o "$part" "$url" \
+     && curl -Lf --retry 3 --retry-all-errors --max-time 60 -o "$part.sha256" "$url.sha256"; then
+    local want got
+    want="$(cut -d' ' -f1 "$part.sha256" 2>/dev/null)"
+    got="$(sha256sum "$part" | cut -d' ' -f1)"
+    rm -f "$part.sha256"
+    if [ -n "$want" ] && [ "$want" = "$got" ]; then
+      mv "$part" "$ROOT/gui/bin/$GUI_ASSET"
+      chmod +x "$ROOT/gui/bin/$GUI_ASSET"
+      GUI_BIN="$ROOT/gui/bin/$GUI_ASSET"
+      return 0
+    fi
+    warn "GUI asset checksum mismatch (want $want, got $got)"
+  fi
+  rm -f "$part" "$part.sha256"
+  return 1
+}
+
 umu_deb_suffix() {
   local id="" codename="" vid=""
   if [ -r "$OS_RELEASE" ]; then
@@ -665,11 +718,11 @@ EOF
 step_gui_deps() {
   step "GUI dependencies"
   PYSIDE_PIP=0
-  if [ -f "$ROOT/gui/app.py" ]; then
+  if [ -f "$ROOT/translate/qml/Textbox.qml" ]; then
     if python3 -c "import PySide6" 2>/dev/null; then
       ok "PySide6"
     else
-      miss "PySide6 (GUI)"; missing=1
+      miss "PySide6 (translation textbox)"; missing=1
       if [ "$CHECK_ONLY" = "0" ]; then
         case "$PM" in
           arch) add_pkg pyside6 ;;
@@ -679,7 +732,7 @@ step_gui_deps() {
       fi
     fi
   fi
-  if [ -f "$ROOT/gui/app.py" ] && [ "$PYSIDE_PIP" = "0" ]; then
+  if [ -f "$ROOT/translate/qml/Textbox.qml" ] && [ "$PYSIDE_PIP" = "0" ]; then
     local qmldir qmlmiss m
     qmldir="$(python3 -c "from PySide6.QtCore import QLibraryInfo; print(QLibraryInfo.path(QLibraryInfo.LibraryPath.QmlImportsPath))" 2>/dev/null || true)"
     _qmlmod_ok() {
@@ -698,7 +751,7 @@ step_gui_deps() {
     if [ -z "$qmlmiss" ]; then
       ok "QtQuick QML modules (Controls/Layouts/Dialogs/Effects)"
     else
-      miss "QML modules:$qmlmiss (the GUI and translation textbox need them)"; missing=1
+      miss "QML modules:$qmlmiss (the translation textbox needs them)"; missing=1
       if [ "$CHECK_ONLY" = "0" ]; then
         case "$PM" in
           arch) add_pkg qt6-declarative ;;
@@ -715,7 +768,7 @@ step_gui_deps() {
     if [ -n "$qmldir" ] && [ -d "$qmldir/org/kde/desktop" ]; then
       ok "KDE Quick Controls style (org.kde.desktop)"
     else
-      note "org.kde.desktop QML style not found — GUI/textbox fall back to Fusion"
+      note "org.kde.desktop QML style not found — the textbox falls back to Fusion"
       if [ "$CHECK_ONLY" = "0" ]; then
         case "$PM" in
           arch) pkg_available qqc2-desktop-style && add_pkg qqc2-desktop-style ;;
@@ -742,8 +795,43 @@ step_gui_deps() {
     esac
     unset qmldir qmlmiss m
   fi
+  # gpui GUI: a runnable binary plus its X11/xkbcommon runtime libs.
+  if GUI_BIN="$(gui_binary_path)"; then
+    ok "gpui GUI binary ($GUI_BIN)"
+  else
+    note "gpui GUI not built yet — install.sh builds it after the packages (or downloads the release asset)"
+  fi
+  local gui_lib
+  for gui_lib in libxkbcommon.so.0 libxcb-xkb.so.1 libxcb.so.1; do
+    if ldconfig -p 2>/dev/null | grep -q "$gui_lib"; then
+      ok "$gui_lib"
+    else
+      miss "$gui_lib (gpui GUI)"; missing=1
+      if [ "$CHECK_ONLY" = "0" ]; then
+        case "$PM" in
+          arch) add_pkg libxkbcommon libxcb ;;
+          deb) add_pkg libxkbcommon0 libxkbcommon-x11-0 libxcb1 ;;
+          fed) add_pkg libxkbcommon libxkbcommon-x11 libxcb ;;
+          *) add_note "libxkbcommon + libxcb (gpui GUI)" ;;
+        esac
+      fi
+    fi
+  done
   if [ "${#PIP_PKGS[@]}" -gt 0 ] && [ "$CHECK_ONLY" = "0" ]; then
     case "$PM" in deb|fed) add_pkg python3-pip ;; esac
+  fi
+}
+
+# ===========================================================================
+# gpui GUI binary (build from source, or fetch the pinned release asset)
+# ===========================================================================
+step_gui_binary() {
+  step "gpui GUI"
+  if ensure_gui_binary; then
+    ok "binary ready: $GUI_BIN"
+  else
+    miss "gpui GUI binary (cargo build --release in gui/, or the $GUI_TAG release asset)"
+    missing=1
   fi
 }
 
@@ -1210,8 +1298,16 @@ step_symlinks() {
     fi
   done
   ln -sf "$ROOT/scripts/migaki" "$HOME/.local/bin/migaki"
-  if [ -f "$ROOT/gui/app.py" ]; then
-    ln -sf "$ROOT/gui/app.py" "$HOME/.local/bin/migaki-gui"
+  GUI_BIN="$(gui_binary_path || true)"
+  if [ -n "$GUI_BIN" ]; then
+    # A wrapper (not a symlink) so the binary keeps the checkout as its root.
+    rm -f "$HOME/.local/bin/migaki-gui"
+    cat > "$HOME/.local/bin/migaki-gui" <<EOF2
+#!/bin/sh
+# Generated by migaki's install.sh — pins the checkout root for the gpui GUI.
+MIGAKI_ROOT="$ROOT" exec "$GUI_BIN" "\$@"
+EOF2
+    chmod +x "$HOME/.local/bin/migaki-gui"
     ok "migaki, migaki-gui -> ~/.local/bin/"
   else
     ok "migaki -> ~/.local/bin/ (gui not built yet)"
@@ -1251,18 +1347,19 @@ step_desktop_entries() {
   for s in 16 24 32 48 64 128 256; do
     rm -f "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/anime4k.png"
   done
-  if [ -f "$ROOT/gui/app.py" ]; then
+  GUI_BIN="$(gui_binary_path || true)"
+  if [ -n "$GUI_BIN" ]; then
     cat > "$HOME/.local/share/applications/migaki-gui.desktop" <<EOF2
 [Desktop Entry]
 Name=Migaki (GUI)
 Comment=Launch games with real-time image restoration
-Exec=$ROOT/gui/app.py
+Exec=$GUI_BIN
 Icon=migaki
 Terminal=false
 Type=Application
 Categories=Game;
 StartupNotify=true
-StartupWMClass=migaki-gui
+StartupWMClass=migaki
 EOF2
   fi
 
@@ -1308,6 +1405,7 @@ main() {
   step_umu
   step_vkbasalt
   confirm_and_install_packages
+  step_gui_binary
   step_vkbasalt_build
   step_proton
   step_rpgmaker

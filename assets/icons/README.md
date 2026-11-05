@@ -27,6 +27,7 @@ gradient iris, limbal ring and blur.
 * `install.sh --desktop` installs the hicolor PNG set plus
   `hicolor/scalable/apps/migaki.svg` (and a `~/.local/share/pixmaps/`
   fallback), and writes `migaki-gui.desktop` with `Icon=migaki`.
-* `gui/app.py` sets `setDesktopFileName("migaki-gui")` and loads
-  `png/migaki-256.png` as the window icon.
+* `gui/src/main.rs` opens the window with `app_id = "migaki"` (the desktop
+  entry's `StartupWMClass`) and the title `Migaki`; the icon comes from the
+  desktop entry, not the binary.
 * `uninstall.sh` removes the deployed icons again.

@@ -283,12 +283,12 @@ fi
 if [ -z "$_QMISSING" ]; then
   ok "QtQuick QML modules (Controls/Layouts/Dialogs/Effects)"
 else
-  bad "QML modules missing:$_QMISSING (GUI + textbox need qt6-declarative)"
+  bad "QML modules missing:$_QMISSING (the textbox needs qt6-declarative)"
 fi
 if [ -n "$_QD" ] && [ -d "$_QD/org/kde/desktop" ]; then
   ok "KDE Quick Controls style (follows desktop colour scheme)"
 else
-  echo "note: org.kde.desktop QML style absent — GUI/textbox use the Fusion fallback (install qqc2-desktop-style)"
+  echo "note: org.kde.desktop QML style absent — the textbox uses the Fusion fallback (install qqc2-desktop-style)"
 fi
 unset _QD _QMISSING _m
 # Textbox always-on-top support for this session (stacking-only backends).
@@ -324,16 +324,22 @@ else
   esac
 fi
 unset _ak_wl _ak_desk
-# GUI + textbox UI load smoke test (headless; no display needed).
-_GUI="$SCRIPT_DIR/../gui/app.py"
-if [ -f "$_GUI" ] && python3 -c "import PySide6" 2>/dev/null; then
-  if QT_QPA_PLATFORM=offscreen timeout 40 python3 "$_GUI" --self-test >/dev/null 2>&1; then
-    ok "GUI loads (QML self-test)"
+# gpui GUI + bridge smoke test (spawns bridge/main.py, prints the snapshot).
+_GUI=""
+for _cand in "$SCRIPT_DIR/../gui/bin/migaki-gui-x86_64" \
+             "$SCRIPT_DIR/../gui/target/release/migaki-gui"; do
+  [ -x "$_cand" ] && { _GUI="$_cand"; break; }
+done
+if [ -n "$_GUI" ]; then
+  if MIGAKI_ROOT="$SCRIPT_DIR/.." timeout 60 "$_GUI" --self-test >/dev/null 2>&1; then
+    ok "GUI + bridge (gpui self-test)"
   else
     bad "GUI self-test failed (run: migaki-gui --diagnose; log: ~/.cache/migaki/gui.log)"
   fi
+else
+  skip "gpui GUI binary (re-run install.sh to build it)"
 fi
-unset _GUI
+unset _GUI _cand
 _BR=""
 for _b in brave brave-browser brave-origin chromium chromium-browser google-chrome google-chrome-stable chrome microsoft-edge microsoft-edge-stable vivaldi opera; do
   _p="$(command -v "$_b" 2>/dev/null)" || continue

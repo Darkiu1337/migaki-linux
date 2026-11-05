@@ -44,7 +44,7 @@ Nothing is upscaled; resolution never changes.
 * **32-bit D3D titles filter too** — the Proton runner defaults to Wine new
   WoW64, so 32-bit games present a 64-bit Vulkan swapchain the layer can hook
   (opt out per game with `wow64=0` if a title refuses it).
-* **Per-game library** (TUI + Qt Quick GUI sharing one JSON store): variant,
+* **Per-game library** (TUI + gpui GUI sharing one JSON store): variant,
   GPU, fps cap, overlay, locale, prefix mode.
 * **A/B comparison** — unfiltered launches structurally withhold the layer, so
   the loader never sees vkBasalt.
@@ -67,9 +67,11 @@ Nothing is upscaled; resolution never changes.
   the pointer). An optional auto-built **name glossary** and **context
   injection** keep names consistent and resolve pronouns across lines.
   Details: `docs/translate.md`.
-* **Theme** — the GUI and the textbox use the KDE Quick Controls style and
-  follow your desktop colour scheme (light or dark); no in-app switch.
-* **Settings** (top bar) — a per-app GUI font (defaults to your environment
+* **Theme** — the GUI reads omarchy's live theme files
+  (`~/.local/state/omarchy/current/theme`) and repaints when `omarchy theme
+  set` rewrites them; the textbox uses the KDE Quick Controls style. No in-app
+  theme switch.
+* **Settings** (top bar) — a per-app GUI font (defaults to your monospace
   font), a Proton picker over the common `compatibilitytools.d` folders
   (UMU-Proton is always available), and a **Refresh GPUs** button.
 * **Background detection** — GPU enumeration and game-icon extraction run off
@@ -93,14 +95,16 @@ git clone https://github.com/Darkiu1337/migaki-linux.git && cd migaki-linux
 ./install.sh                 # deps, vkBasalt, Proton, RPGMaker, shaders, translation, symlinks
 ./install.sh --check-only    # audit only (no changes)
 ./install.sh --dry-run       # show what would be installed
-migaki                       # TUI  |  migaki-gui  # Qt GUI
+migaki                       # TUI  |  migaki-gui  # gpui GUI
 ```
 
 Per-distro package names and prerequisites: `requirements.md`. A working Vulkan
 **driver + loader** is assumed — the installer does not install graphics
-drivers. The installer symlinks `migaki` / `migaki-gui` (plus `vn-launch` /
-`vn-textbox` / `vn-translate` with translation support) into `~/.local/bin` and
-offers to add it to `PATH`. One shared Wine prefix lives under
+drivers. `install.sh` builds the Rust GUI with `cargo build --release` (or
+downloads the pinned `gui-v1` release asset when cargo is missing), then installs
+`~/.local/bin/migaki-gui` as a small wrapper (`MIGAKI_ROOT`) plus the `migaki`
+symlink (`vn-launch` / `vn-textbox` / `vn-translate` with translation support)
+and offers to add that directory to `PATH`. One shared Wine prefix lives under
 `~/.local/share/migaki/prefixes/`; personal defaults in
 `~/.config/migaki/config.json`. Run `./uninstall.sh` to remove the deployed
 pieces again (shaders, symlinks, desktop entries, GNOME extension, caches) — it
@@ -113,11 +117,11 @@ per-game in the wizard and the game list.
 
 ```sh
 migaki doctor            # audit the whole chain (filter, runners, translation, GUI)
-migaki-gui --diagnose    # versions, paths, style/font/palette, QML context validity
-migaki-gui --self-test   # load the entire UI headlessly; fails on any QML error
+migaki-gui --diagnose    # checkout root, python, theme dir, bridge log, then --self-test
+migaki-gui --self-test   # spawn the bridge and print the snapshot it reports
 ```
 
-Runtime QML errors are also appended to `~/.cache/migaki/gui.log`. Set
+Bridge stderr is appended to `~/.cache/migaki/gui.log`. Set
 `MIGAKI_DEBUG=1` to keep the runner shell traces in the launch log.
 
 ## Layout
@@ -127,7 +131,8 @@ Runtime QML errors are also appended to `~/.cache/migaki/gui.log`. Set
   detection, icons (imported by TUI/GUI/textbox). `python3 -m core
   <launch|add|set|tset|remove|gpus>` is the TUI's write path (one store,
   backups, validation).
-* `gui/` — Qt Quick frontend (`app.py` bootstrap + `qml/` screens)
+* `gui/` — gpui (Rust) frontend: `src/` window/dialogs/theme, `bridge/` the
+  NDJSON client for `bridge/main.py`
 * `translate/` — VN translation: hook launcher, DeepL bridge, Luna-style textbox
 * `shaders/` — ported `.fx` files + `gen_restore_fx.py` port generator
 * `docs/` — `limits.md` (constraints), `translate.md` (VN translation manual),
