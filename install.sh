@@ -293,8 +293,9 @@ ensure_gui_binary() {
   mkdir -p "$ROOT/gui/bin"
   local url="https://github.com/$MIGAKI_REPO/releases/download/$GUI_TAG/$GUI_ASSET"
   local part="$ROOT/gui/bin/$GUI_ASSET.part"
-  if curl -Lf --retry 3 --retry-all-errors --max-time 600 -o "$part" "$url" \
-     && curl -Lf --retry 3 --retry-all-errors --max-time 60 -o "$part.sha256" "$url.sha256"; then
+  note "downloading $GUI_ASSET from the $GUI_TAG release"
+  if curl -sLf --retry 3 --retry-all-errors --max-time 600 -o "$part" "$url" \
+     && curl -sLf --retry 3 --retry-all-errors --max-time 60 -o "$part.sha256" "$url.sha256"; then
     local want got
     want="$(cut -d' ' -f1 "$part.sha256" 2>/dev/null)"
     got="$(sha256sum "$part" | cut -d' ' -f1)"
