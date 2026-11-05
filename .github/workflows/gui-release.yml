@@ -1,7 +1,7 @@
 name: GUI release
 
 # Builds the gpui launcher and publishes it as the release asset install.sh
-# downloads (migaki-gui-x86_64). Tag a release with `git tag gui-v1 && git push
+# downloads (migaki-gui-x86_64). Tag a release with `git tag gui-v2 && git push
 # --tags` to publish; workflow_dispatch only produces a build artifact.
 on:
   push:
