@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # install.sh — the single installer for migaki-linux.
 #
-# One idempotent flow does everything: distro packages, vkBasalt, Proton,
-# RPGMaker support, shaders, translation (Textractor + DeepL), textbox Top and
-# desktop entries. It never overwrites your config or game library.
+# One idempotent flow installs everything: distro packages, the gpui GUI,
+# vkBasalt, Proton, RPGMaker support, shaders, translation (Textractor +
+# DeepL), textbox Top, symlinks and desktop entries. It never overwrites your
+# config or game library.
 #
-# Usage: ./install.sh [--check-only] [--dry-run] [--desktop] [--no-symlink] [-y]
+# Usage: ./install.sh [--check-only] [--dry-run] [--ask] [--no-desktop] [--no-symlink]
 #   --check-only   audit only; exit 1 if a required tool is missing
 #   --dry-run      print what would be installed, change nothing
-#   --desktop      also install .desktop entries (menu launchers)
+#   --ask          ask before each optional piece (default: install everything)
+#   --no-desktop   skip the .desktop menu entries
 #   --no-symlink   do not create ~/.local/bin symlinks
-#   -y, --yes      assume yes (unattended)
 #
 # Internal (used by the runtime self-heal; not for humans):
 #   --fetch-vendor [--bridge fixed|stock] [--all] [--dir DIR]
@@ -43,7 +44,7 @@ err()  { printf '  %s✗%s %s\n' "$C_RED" "$C_RESET" "$*" >&2; }
 # ===========================================================================
 # Flags
 # ===========================================================================
-CHECK_ONLY=0; DRY_RUN=0; DESKTOP=0; SYMLINK=1; ASSUME_YES=0
+CHECK_ONLY=0; DRY_RUN=0; DESKTOP=1; SYMLINK=1; ASSUME_YES=1
 MODE="install"
 FETCH_DIR="$VENDOR_DIR_DEFAULT"; FETCH_ALL=0
 PROV_PREFIX=""; PROV_VDIR="$VENDOR_DIR_DEFAULT"; PROV_LINK=1
@@ -53,16 +54,21 @@ usage() {
   cat <<'EOF'
 install.sh — the single installer for migaki-linux.
 
-One idempotent flow: distro packages, vkBasalt, Proton, RPGMaker support,
-shaders, VN translation, textbox Top and desktop entries. It never overwrites
-your config (~/.config/migaki) or game library.
+One idempotent flow installs everything: distro packages, the gpui GUI,
+vkBasalt, Proton, RPGMaker support, shaders, VN translation, textbox Top,
+symlinks and desktop entries. It never overwrites your config
+(~/.config/migaki) or game library.
 
-Usage: ./install.sh [--check-only] [--dry-run] [--desktop] [--no-symlink] [-y]
+Usage: ./install.sh [--check-only] [--dry-run] [--ask] [--no-desktop] [--no-symlink]
   --check-only   audit only; exit 1 if a required tool is missing
   --dry-run      print what would be installed, change nothing
-  --desktop      also install .desktop menu entries
+  --ask          ask before each optional piece (default: install everything)
+  --no-desktop   skip the .desktop menu entries
   --no-symlink   do not create ~/.local/bin symlinks
-  -y, --yes      assume yes (unattended)
+
+Everything is installed without questions by default: distro packages, the
+gpui GUI, vkBasalt, the verified Proton build, RPGMaker support, shaders, VN
+translation, the textbox Top extension, symlinks and desktop entries.
 EOF
 }
 
@@ -71,7 +77,9 @@ while [ $# -gt 0 ]; do
     --check-only) CHECK_ONLY=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --desktop) DESKTOP=1; shift ;;
+    --no-desktop) DESKTOP=0; shift ;;
     --no-symlink) SYMLINK=0; shift ;;
+    --ask) ASSUME_YES=0; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --help|-h) usage; exit 0 ;;
     --fetch-vendor) MODE="fetch"; shift ;;
@@ -101,22 +109,13 @@ _prompt_read() {
   if tty_readable; then read -r "$1" </dev/tty || eval "$1=''"
   else read -r "$1" || eval "$1=''"; fi
 }
-confirm() {   # default Yes
+confirm() {   # yes by default; --ask restores the prompt
   if [ "$ASSUME_YES" = "1" ]; then return 0; fi
   local ans
   while true; do
     printf '  %s?%s %s %s[Y/n]%s ' "$C_CYAN" "$C_RESET" "$1" "$C_DIM" "$C_RESET"
     _prompt_read ans
     case "$ans" in ""|[Yy]|[Yy][Ee][Ss]) return 0 ;; [Nn]|[Nn][Oo]) return 1 ;; *) note "please answer y or n." ;; esac
-  done
-}
-confirm_no() { # default No
-  if [ "$ASSUME_YES" = "1" ]; then return 1; fi
-  local ans
-  while true; do
-    printf '  %s?%s %s %s[y/N]%s ' "$C_CYAN" "$C_RESET" "$1" "$C_DIM" "$C_RESET"
-    _prompt_read ans
-    case "$ans" in ""|[Nn]|[Nn][Oo]) return 1 ;; [Yy]|[Yy][Ee][Ss]) return 0 ;; *) note "please answer y or n." ;; esac
   done
 }
 
@@ -796,24 +795,25 @@ step_gui_deps() {
     esac
     unset qmldir qmlmiss m
   fi
-  # gpui GUI: a runnable binary plus its X11/xkbcommon runtime libs.
+  # gpui GUI: a runnable binary plus its X11/xkbcommon runtime libs (the ones
+  # the shipped binary links: libxkbcommon, libxkbcommon-x11, libxcb, libxcb-xkb).
   if GUI_BIN="$(gui_binary_path)"; then
     ok "gpui GUI binary ($GUI_BIN)"
   else
-    note "gpui GUI not built yet — install.sh builds it after the packages (or downloads the release asset)"
+    note "gpui GUI not built yet — install.sh builds it with cargo after the packages, else downloads the $GUI_TAG release asset"
   fi
   local gui_lib
-  for gui_lib in libxkbcommon.so.0 libxcb-xkb.so.1 libxcb.so.1; do
+  for gui_lib in libxkbcommon.so.0 libxkbcommon-x11.so.0 libxcb.so.1 libxcb-xkb.so.1; do
     if ldconfig -p 2>/dev/null | grep -q "$gui_lib"; then
       ok "$gui_lib"
     else
       miss "$gui_lib (gpui GUI)"; missing=1
       if [ "$CHECK_ONLY" = "0" ]; then
         case "$PM" in
-          arch) add_pkg libxkbcommon libxcb ;;
-          deb) add_pkg libxkbcommon0 libxkbcommon-x11-0 libxcb1 ;;
-          fed) add_pkg libxkbcommon libxkbcommon-x11 libxcb ;;
-          *) add_note "libxkbcommon + libxcb (gpui GUI)" ;;
+          arch) add_pkg libxkbcommon libxkbcommon-x11 libxcb ;;
+          deb) add_pkg libxkbcommon-dev libxcb1-dev libxcb-xkb-dev ;;
+          fed) add_pkg libxkbcommon-devel libxcb-devel ;;
+          *) add_note "libxkbcommon + libxkbcommon-x11 + libxcb (gpui GUI)" ;;
         esac
       fi
     fi
@@ -926,7 +926,7 @@ confirm_and_install_packages() {
       printf '  (dry run: nothing installed)\n'
       return 0
     fi
-    confirm "install all of the above?" || { note "skipped package install"; return 0; }
+    confirm "install all of the above?" || { note "skipped (re-run install.sh to add them later)"; return 0; }
     local tmp; tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
     command -v curl >/dev/null 2>&1 || pm_install_batch curl || true
     if [ -n "${WANT_GUM_DEB:-}" ]; then
@@ -1026,7 +1026,7 @@ step_proton() {
     note "$CACHYOS_PROTON_NAME not found (recommended; umu falls back to UMU-Proton)"
   elif [ "$DRY_RUN" = "1" ]; then
     note "would offer to install $CACHYOS_PROTON_NAME (~1GB)"
-  elif confirm_no "install $CACHYOS_PROTON_NAME (verified Proton; ~1GB download)?"; then
+  elif confirm "install $CACHYOS_PROTON_NAME (verified Proton; ~1GB download)?"; then
     if install_cachyos_proton "$CACHYOS_PROTON_DIR" "$CACHYOS_PROTON_NAME"; then
       seed_proton_default "$CACHYOS_PROTON_DIR"
     else
@@ -1107,7 +1107,7 @@ step_rpgmaker() {
     ok "rpgmaker-linux ($(rpgmaker-linux --version 2>/dev/null | head -n 1))"
   elif [ "$CHECK_ONLY" = "1" ] || [ "$DRY_RUN" = "1" ]; then
     note "rpgmaker-linux not installed (needed for the rpgmaker runner)"
-  elif confirm_no "install rpgmaker-linux support? (downloads NW.js runtimes, several hundred MB)"; then
+  elif confirm "install rpgmaker-linux support? (downloads NW.js runtimes, several hundred MB)"; then
     local t
     for t in curl tar; do
       command -v "$t" >/dev/null 2>&1 || { err "'$t' needed for this step"; return 1; }
@@ -1237,7 +1237,7 @@ install_gnome_top_extension() {
     note "would install GNOME Shell extension vn-textbox-top@migaki"
     return 0
   fi
-  if ! confirm_no "install the GNOME Shell extension for textbox always-on-top? (may need re-login)"; then
+  if ! confirm "install the GNOME Shell extension for textbox always-on-top? (may need re-login)"; then
     note "skipped; textbox Top stays unsupported on GNOME Wayland"
     return 0
   fi
@@ -1327,10 +1327,8 @@ EOF2
       local rc
       for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
         if [ -f "$rc" ] && ! grep -q '\.local/bin' "$rc"; then
-          if confirm "append ~/.local/bin to PATH in $rc?"; then
-            printf '\n# added by migaki-linux install.sh\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
-            note "added (restart your shell to take effect)"
-          fi
+          printf '\n# added by migaki-linux install.sh\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$rc"
+          note "added ~/.local/bin to $rc (restart your shell to take effect)"
         fi
       done ;;
   esac
@@ -1348,13 +1346,17 @@ step_desktop_entries() {
   for s in 16 24 32 48 64 128 256; do
     rm -f "$HOME/.local/share/icons/hicolor/${s}x${s}/apps/anime4k.png"
   done
-  GUI_BIN="$(gui_binary_path || true)"
-  if [ -n "$GUI_BIN" ]; then
+  local gui_exec
+  gui_exec="$(gui_binary_path || true)"
+  if [ -z "$gui_exec" ] && [ -x "$HOME/.local/bin/migaki-gui" ]; then
+    gui_exec="$HOME/.local/bin/migaki-gui"
+  fi
+  if [ -n "$gui_exec" ]; then
     cat > "$HOME/.local/share/applications/migaki-gui.desktop" <<EOF2
 [Desktop Entry]
 Name=Migaki (GUI)
 Comment=Launch games with real-time image restoration
-Exec=$GUI_BIN
+Exec=$gui_exec
 Icon=migaki
 Terminal=false
 Type=Application

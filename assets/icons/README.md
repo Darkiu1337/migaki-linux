@@ -24,9 +24,10 @@ gradient iris, limbal ring and blur.
 
 ## Where it is wired in
 
-* `install.sh --desktop` installs the hicolor PNG set plus
+* `install.sh` installs the hicolor PNG set plus
   `hicolor/scalable/apps/migaki.svg` (and a `~/.local/share/pixmaps/`
-  fallback), and writes `migaki-gui.desktop` with `Icon=migaki`.
+  fallback), and writes `migaki-gui.desktop` with `Icon=migaki` (skip both with
+  `--no-desktop`).
 * `gui/src/main.rs` opens the window with `app_id = "migaki"` (the desktop
   entry's `StartupWMClass`) and the title `Migaki`; the icon comes from the
   desktop entry, not the binary.
