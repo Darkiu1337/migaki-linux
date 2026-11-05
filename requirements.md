@@ -76,22 +76,26 @@ The launcher GUI is a Rust binary (`gui/`, gpui 0.2.2) that speaks NDJSON to
 the filter already require). Building from source additionally needs a Rust
 toolchain (edition 2024, stable ≥ 1.85).
 
-| Distro | Build + runtime |
+| Distro | Runtime libraries |
 |---|---|
-| Arch | `sudo pacman -S rust libxkbcommon libxkbcommon-x11 libxcb` |
-| Debian / Ubuntu | `sudo apt install build-essential libxkbcommon-dev libxcb1-dev libxcb-xkb-dev` |
-| Fedora | `sudo dnf install gcc gcc-c++ libxkbcommon-devel libxcb-devel` |
+| Arch | `sudo pacman -S libxkbcommon libxkbcommon-x11 libxcb` |
+| Debian / Ubuntu | `sudo apt install libxkbcommon0 libxkbcommon-x11-0 libxcb1 libxcb-xkb1` |
+| Fedora | `sudo dnf install libxkbcommon libxkbcommon-x11 libxcb` |
 
 The runtime libraries the shipped binary links are `libxkbcommon.so.0`,
 `libxkbcommon-x11.so.0`, `libxcb.so.1` and `libxcb-xkb.so.1`; `install.sh`
 checks them and installs the packages above.
 
-`install.sh` runs `cargo build --release` in `gui/` (first build takes a few
-minutes) or, when cargo is unavailable, downloads the pinned `gui-v1` release
-asset `migaki-gui-x86_64` into `gui/bin/`. It installs `~/.local/bin/migaki-gui`
-as a wrapper that exports `MIGAKI_ROOT`, and with `--desktop` a
-`migaki-gui.desktop` entry (`StartupWMClass=migaki`). `gui-release.yml` publishes
-that asset from a `gui-v*` tag.
+`install.sh` never compiles anything: it downloads the prebuilt
+`migaki-gui-x86_64` from the pinned `gui-v1` release and verifies its sha256.
+Rust is only needed by developers who want a local build
+(`cargo build --release` in `gui/`, which additionally needs `pkg-config`,
+`libxkbcommon-dev`/`-devel` and `libxcb1-dev`/`libxcb-devel`).
+
+`migaki-gui-x86_64` into `gui/bin/`. It installs `~/.local/bin/migaki-gui`
+as a wrapper that exports `MIGAKI_ROOT`, and a `migaki-gui.desktop` entry
+(`StartupWMClass=migaki`). `gui-release.yml` publishes that asset from a
+`gui-v*` tag.
 
 The GUI reads omarchy's live theme files
 (`~/.local/state/omarchy/current/theme/{colors,shell}.toml`) at start and repolls

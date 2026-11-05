@@ -258,7 +258,7 @@ download_asset() {
     -o "$dest/$asset" "https://github.com/$repo/releases/download/$tag/$asset"
 }
 # gpui GUI binary: built by .github/workflows/gui-release.yml and published as
-# a release asset. A local cargo build wins; the asset is the fallback.
+# a release asset. The installer only downloads it — users never compile.
 MIGAKI_REPO="${MIGAKI_REPO:-Darkiu1337/migaki-linux}"
 GUI_TAG="${GUI_RELEASE_TAG:-gui-v1}"
 GUI_ASSET="migaki-gui-x86_64"
@@ -275,20 +275,19 @@ gui_binary_path() {
   return 1
 }
 
-# Sets GUI_BIN (existing build, then a local cargo build, then the pinned
-# release asset). Returns 1 when no runnable binary is available.
+# Sets GUI_BIN: an existing build in the checkout, else the published release
+# asset. Users never compile anything; the binary is built by CI and verified
+# against its sha256. Returns 1 when no runnable binary is available.
 ensure_gui_binary() {
   if GUI_BIN="$(gui_binary_path)"; then
     return 0
   fi
   [ "$CHECK_ONLY" = "1" ] || [ "$DRY_RUN" = "1" ] && return 1
-  if command -v cargo >/dev/null 2>&1; then
-    note "building the gpui GUI (cargo build --release; first build takes a while)"
-    if ( cd "$ROOT/gui" && cargo build --release ); then
-      GUI_BIN="$(gui_binary_path)" && return 0
-    fi
-    note "cargo build failed — falling back to the prebuilt release asset"
-  fi
+  download_gui_asset && [ -n "$GUI_BIN" ]
+}
+
+# Download + checksum-verify migaki-gui-x86_64 (sets GUI_BIN on success).
+download_gui_asset() {
   mkdir -p "$ROOT/gui/bin"
   local url="https://github.com/$MIGAKI_REPO/releases/download/$GUI_TAG/$GUI_ASSET"
   local part="$ROOT/gui/bin/$GUI_ASSET.part"
@@ -811,8 +810,8 @@ step_gui_deps() {
       if [ "$CHECK_ONLY" = "0" ]; then
         case "$PM" in
           arch) add_pkg libxkbcommon libxkbcommon-x11 libxcb ;;
-          deb) add_pkg libxkbcommon-dev libxcb1-dev libxcb-xkb-dev ;;
-          fed) add_pkg libxkbcommon-devel libxcb-devel ;;
+          deb) add_pkg libxkbcommon0 libxkbcommon-x11-0 libxcb1 libxcb-xkb1 ;;
+          fed) add_pkg libxkbcommon libxkbcommon-x11 libxcb ;;
           *) add_note "libxkbcommon + libxkbcommon-x11 + libxcb (gpui GUI)" ;;
         esac
       fi
@@ -831,7 +830,7 @@ step_gui_binary() {
   if ensure_gui_binary; then
     ok "binary ready: $GUI_BIN"
   else
-    miss "gpui GUI binary (cargo build --release in gui/, or the $GUI_TAG release asset)"
+    miss "gpui GUI binary (could not download the $GUI_TAG release asset)"
     missing=1
   fi
 }
