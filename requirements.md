@@ -78,9 +78,13 @@ toolchain (edition 2024, stable ≥ 1.85).
 
 | Distro | Build + runtime |
 |---|---|
-| Arch | `sudo pacman -S rust libxkbcommon libxcb` |
-| Debian / Ubuntu | `sudo apt install build-essential libxkbcommon-dev libxkbcommon-x11-0 libxcb1-dev` |
-| Fedora | `sudo dnf install gcc gcc-c++ libxkbcommon libxkbcommon-x11 libxcb-devel` |
+| Arch | `sudo pacman -S rust libxkbcommon libxkbcommon-x11 libxcb` |
+| Debian / Ubuntu | `sudo apt install build-essential libxkbcommon-dev libxcb1-dev libxcb-xkb-dev` |
+| Fedora | `sudo dnf install gcc gcc-c++ libxkbcommon-devel libxcb-devel` |
+
+The runtime libraries the shipped binary links are `libxkbcommon.so.0`,
+`libxkbcommon-x11.so.0`, `libxcb.so.1` and `libxcb-xkb.so.1`; `install.sh`
+checks them and installs the packages above.
 
 `install.sh` runs `cargo build --release` in `gui/` (first build takes a few
 minutes) or, when cargo is unavailable, downloads the pinned `gui-v1` release

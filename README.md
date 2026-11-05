@@ -92,7 +92,9 @@ automatically, and anything else warns with a one-click switch. See
 
 ```sh
 git clone https://github.com/Darkiu1337/migaki-linux.git && cd migaki-linux
-./install.sh                 # deps, vkBasalt, Proton, RPGMaker, shaders, translation, symlinks
+./install.sh                 # everything, no questions: deps, GUI, vkBasalt, Proton,
+                             # RPGMaker, shaders, translation, textbox Top, symlinks, entries
+./install.sh --ask           # same, but confirm each optional piece
 ./install.sh --check-only    # audit only (no changes)
 ./install.sh --dry-run       # show what would be installed
 migaki                       # TUI  |  migaki-gui  # gpui GUI
@@ -104,7 +106,7 @@ drivers. `install.sh` builds the Rust GUI with `cargo build --release` (or
 downloads the pinned `gui-v1` release asset when cargo is missing), then installs
 `~/.local/bin/migaki-gui` as a small wrapper (`MIGAKI_ROOT`) plus the `migaki`
 symlink (`vn-launch` / `vn-textbox` / `vn-translate` with translation support)
-and offers to add that directory to `PATH`. One shared Wine prefix lives under
+and adds that directory to your shell `PATH`. One shared Wine prefix lives under
 `~/.local/share/migaki/prefixes/`; personal defaults in
 `~/.config/migaki/config.json`. Run `./uninstall.sh` to remove the deployed
 pieces again (shaders, symlinks, desktop entries, GNOME extension, caches) — it
