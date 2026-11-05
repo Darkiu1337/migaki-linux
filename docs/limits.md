@@ -68,8 +68,8 @@ doctor` prints the connector→GPU map so a wrong pick is explainable.
 
 Run `migaki doctor` on a new machine to verify the whole chain (manifest,
 library, shaders, GPU, runner backends, 32-bit/WoW64 posture, translation
-deps, KDE QML style, live vkcube run and a headless GUI self-test) without any
-game.
+deps, KDE QML style for the textbox, live vkcube run and a gpui GUI self-test)
+without any game.
 
 ## Display servers and compositors
 

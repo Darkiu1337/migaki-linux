@@ -7,7 +7,7 @@ PRESETS_JSON = os.path.join(SHADERS_DIR, "presets.json")
 TRANSLATE_DIR = os.path.join(REPO_ROOT, "translate")
 
 CONFIG_DIR = os.path.expanduser("~/.config/migaki")
-GAMES_JSON = os.path.join(CONFIG_DIR, "games.json")
+GAMES_JSON = os.environ.get("MIGAKI_GAMES_JSON") or os.path.join(CONFIG_DIR, "games.json")
 CONFIG_JSON = os.path.join(CONFIG_DIR, "config.json")
 ICON_CACHE = os.path.expanduser("~/.cache/migaki/icons")
 GPU_CACHE = os.path.expanduser("~/.cache/migaki/gpus.json")
