@@ -4,7 +4,7 @@
 use gpui::prelude::*;
 use gpui::{
     AnyElement, App, ClickEvent, ElementId, FocusHandle, Pixels, SharedString, Window, anchored,
-    div, point, px,
+    deferred, div, point, px,
 };
 
 use crate::theme::Theme;
@@ -89,7 +89,7 @@ pub fn combo(
     let panel_padding = theme.popup_padding;
     let text_size = theme.body;
     let family = theme.ui_font.clone();
-    let popup_width = width.unwrap_or(px(theme.dropdown_width));
+    let popup_width = width.unwrap_or(px(theme.dropdown_width.max(300.)));
     let control_height = theme.control_height;
     let pad_x = theme.control_padding_x;
 
@@ -160,13 +160,15 @@ pub fn combo(
         .flex()
         .flex_col();
     wrapper = wrapper.child(trigger);
-    if state.open {
-        wrapper = wrapper.child(
+    if state.open && !state.items.is_empty() {
+        // `deferred` paints the popup above the rest of the window; without it
+        // the anchored card is drawn under the rows that follow the trigger.
+        wrapper = wrapper.child(deferred(
             anchored()
                 .offset(point(px(0.), px(control_height)))
                 .snap_to_window_with_margin(px(8.))
                 .child(rows),
-        );
+        ));
     }
     wrapper.into_any_element()
 }
