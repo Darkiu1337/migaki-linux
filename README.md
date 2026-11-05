@@ -102,8 +102,8 @@ migaki                       # TUI  |  migaki-gui  # gpui GUI
 
 Per-distro package names and prerequisites: `requirements.md`. A working Vulkan
 **driver + loader** is assumed — the installer does not install graphics
-drivers. `install.sh` builds the Rust GUI with `cargo build --release` (or
-downloads the pinned `gui-v1` release asset when cargo is missing), then installs
+drivers. `install.sh` downloads the prebuilt Rust GUI from the pinned `gui-v1`
+release (sha256-verified — nothing is compiled), then installs
 `~/.local/bin/migaki-gui` as a small wrapper (`MIGAKI_ROOT`) plus the `migaki`
 symlink (`vn-launch` / `vn-textbox` / `vn-translate` with translation support)
 and adds that directory to your shell `PATH`. One shared Wine prefix lives under
