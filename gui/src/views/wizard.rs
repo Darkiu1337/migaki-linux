@@ -52,9 +52,10 @@ pub struct WizardState {
 }
 
 fn is_display_gpu(app: &MainView, name: &str) -> bool {
+    let lowered = name.to_lowercase();
     app.display_vendors
         .iter()
-        .any(|vendor| !vendor.is_empty() && name.contains(vendor.as_str()))
+        .any(|vendor| !vendor.is_empty() && lowered.contains(&vendor.to_lowercase()))
 }
 
 fn variant_items(app: &MainView) -> Vec<ComboItem> {
@@ -78,6 +79,14 @@ fn variant_items(app: &MainView) -> Vec<ComboItem> {
 }
 
 fn gpu_items(app: &MainView) -> Vec<ComboItem> {
+    if app.gpus.is_empty() {
+        // The probe runs off-thread; the `gpus` event refills the combo when
+        // it lands, but the trigger must never render as an empty box.
+        return vec![ComboItem::new(
+            "auto (discrete GPU preferred)",
+            "auto (discrete GPU preferred)",
+        )];
+    }
     app.gpus
         .iter()
         .map(|name| {
@@ -208,6 +217,16 @@ fn reconcile(
 }
 
 impl WizardState {
+    /// Refill the GPU dropdown when the background probe reports its list,
+    /// keeping the current pick (by value) selected.
+    pub(crate) fn refresh_gpus(&mut self, app: &MainView) {
+        let current = self.gpu.value();
+        self.gpu.items = gpu_items(app);
+        if current.is_empty() || !self.gpu.select_value(&current) {
+            self.gpu.selected = self.gpu.selected.min(self.gpu.items.len() - 1);
+        }
+    }
+
     pub fn new(app: &MainView, gid: Option<String>, cx: &mut Context<MainView>) -> Self {
         let mut variant = ComboState::new(cx, variant_items(app));
         let _ = variant.select_value("L");

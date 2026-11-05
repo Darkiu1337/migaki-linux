@@ -307,6 +307,16 @@ impl MainView {
             self.log.clear();
         }
         self.adopt_games(games, window, cx);
+        self.sync_gpu_dropdown();
+    }
+
+    /// Refill an open wizard's GPU dropdown after the list arrives (init or a
+    /// `gpus` event); the trigger must never keep a stale/empty list.
+    pub(crate) fn sync_gpu_dropdown(&mut self) {
+        if let Modal::Wizard(mut state) = std::mem::replace(&mut self.modal, Modal::None) {
+            state.refresh_gpus(self);
+            self.modal = Modal::Wizard(state);
+        }
     }
 
     /// Rebuild the theme with the app's own font override from config.json.
@@ -371,6 +381,8 @@ impl MainView {
                 if let Modal::Settings(state) = &mut self.modal {
                     state.gpu_status = "GPU list refreshed.".to_string();
                 }
+                self.sync_gpu_dropdown();
+                cx.notify();
             }
             "threads" => {
                 if let Modal::Threads(state) = &mut self.modal {
