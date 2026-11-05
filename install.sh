@@ -288,6 +288,13 @@ ensure_gui_binary() {
 
 # Download + checksum-verify migaki-gui-x86_64 (sets GUI_BIN on success).
 download_gui_asset() {
+  local arch
+  arch="$(uname -m)"
+  if [ "$arch" != "x86_64" ]; then
+    warn "no prebuilt gpui GUI for $arch (the release asset is x86_64 only)"
+    note "build it yourself with: cd gui && cargo build --release"
+    return 1
+  fi
   mkdir -p "$ROOT/gui/bin"
   local url="https://github.com/$MIGAKI_REPO/releases/download/$GUI_TAG/$GUI_ASSET"
   local part="$ROOT/gui/bin/$GUI_ASSET.part"
