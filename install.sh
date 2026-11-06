@@ -260,7 +260,7 @@ download_asset() {
 # gpui GUI binary: built by .github/workflows/gui-release.yml and published as
 # a release asset. The installer only downloads it — users never compile.
 MIGAKI_REPO="${MIGAKI_REPO:-Darkiu1337/migaki-linux}"
-GUI_TAG="${GUI_RELEASE_TAG:-gui-v3}"
+GUI_TAG="${GUI_RELEASE_TAG:-gui-v4}"
 GUI_ASSET="migaki-gui-x86_64"
 GUI_BIN=""
 
