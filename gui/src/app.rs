@@ -313,9 +313,12 @@ impl MainView {
     /// Refill an open wizard's GPU dropdown after the list arrives (init or a
     /// `gpus` event); the trigger must never keep a stale/empty list.
     pub(crate) fn sync_gpu_dropdown(&mut self) {
-        if let Modal::Wizard(mut state) = std::mem::replace(&mut self.modal, Modal::None) {
-            state.refresh_gpus(self);
-            self.modal = Modal::Wizard(state);
+        match std::mem::replace(&mut self.modal, Modal::None) {
+            Modal::Wizard(mut state) => {
+                state.refresh_gpus(self);
+                self.modal = Modal::Wizard(state);
+            }
+            other => self.modal = other,
         }
     }
 
@@ -395,12 +398,14 @@ impl MainView {
             }
             "picked" => {
                 let path = text_field_value(value, "path").to_string();
-                if !path.is_empty()
-                    && let Modal::Wizard(mut state) =
-                        std::mem::replace(&mut self.modal, Modal::None)
-                {
-                    state.path_chosen(self, &path, window, cx);
-                    self.modal = Modal::Wizard(state);
+                if !path.is_empty() {
+                    match std::mem::replace(&mut self.modal, Modal::None) {
+                        Modal::Wizard(mut state) => {
+                            state.path_chosen(self, &path, window, cx);
+                            self.modal = Modal::Wizard(state);
+                        }
+                        other => self.modal = other,
+                    }
                 }
             }
             "bridge_down" => {
@@ -622,25 +627,25 @@ impl MainView {
     // -- modal resolution --------------------------------------------------
 
     pub fn resolve_prompt(&mut self, index: i32, window: &Window, cx: &mut Context<Self>) {
-        let Modal::Prompt(state) = std::mem::replace(&mut self.modal, Modal::None) else {
-            return;
-        };
-        match state.kind {
-            PromptKind::Backend => {
-                self.rpc(
-                    window,
-                    cx,
-                    "prompt.resolve",
-                    json!({"index": index}),
-                    |_, _, _, _| {},
-                );
-            }
-            PromptKind::RemoveGame => {
-                if index == 0 {
-                    self.remove_selected(window, cx);
+        match std::mem::replace(&mut self.modal, Modal::None) {
+            Modal::Prompt(state) => match state.kind {
+                PromptKind::Backend => {
+                    self.rpc(
+                        window,
+                        cx,
+                        "prompt.resolve",
+                        json!({"index": index}),
+                        |_, _, _, _| {},
+                    );
                 }
-            }
-            PromptKind::Notice => {}
+                PromptKind::RemoveGame => {
+                    if index == 0 {
+                        self.remove_selected(window, cx);
+                    }
+                }
+                PromptKind::Notice => {}
+            },
+            other => self.modal = other,
         }
     }
 

@@ -21,7 +21,7 @@ use crate::ui::text_field::{FieldState, text_field};
 /// Page count: runner, location, performance, name, translation.
 const PAGES: usize = 5;
 
-const DETECT_TIP: &str = "Tip: Detect fills in the runner from the previous page.";
+const DETECT_TIP: &str = "Tip: Detect picks the runner from the game files.";
 
 const RPGMAKER_GPU_WARNING: &str = "RPGMaker titles are Chromium/ANGLE-Vulkan and can only filter on \
      the display GPU. On any other GPU Chromium drops Vulkan — no filter, no overlay, and no WebGL. \
@@ -957,12 +957,14 @@ impl MainView {
     }
 
     fn finish_wizard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Modal::Wizard(mut state) = std::mem::replace(&mut self.modal, Modal::None) else {
-            return;
-        };
-        state.finish(self, window, cx);
-        if matches!(&self.modal, Modal::None) {
-            self.modal = Modal::Wizard(state);
+        match std::mem::replace(&mut self.modal, Modal::None) {
+            Modal::Wizard(mut state) => {
+                state.finish(self, window, cx);
+                if matches!(&self.modal, Modal::None) {
+                    self.modal = Modal::Wizard(state);
+                }
+            }
+            other => self.modal = other,
         }
         cx.notify();
     }

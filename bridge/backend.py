@@ -703,15 +703,19 @@ class Backend:
         return {"settings": base}
 
     def list_fonts(self):
+        """Font families (names only). `fc-list ": family"` prints
+        `file: family:style=...` lines, so ask for the family element."""
         try:
-            out = subprocess.run(["fc-list", ": family"], capture_output=True,
-                                 text=True, timeout=15).stdout
+            out = subprocess.run(["fc-list", "--format=%{family}\\n"],
+                                 capture_output=True, text=True, timeout=15).stdout
         except (OSError, subprocess.SubprocessError):
             return []
         fams = set()
         for line in out.splitlines():
             for fam in line.split(","):
                 fam = fam.strip()
+                if fam and os.path.isabs(fam):
+                    fam = fam.rsplit("/", 1)[-1]
                 if fam:
                     fams.add(fam)
         return sorted(fams)
