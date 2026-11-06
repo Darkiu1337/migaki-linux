@@ -106,7 +106,7 @@ impl SettingsState {
             proton,
             font,
             font_size: SpinState::new(cx, size, 0, 72, Some("Default")),
-            gpu_status: "Cached; refreshes automatically when GPUs change.".to_string(),
+            gpu_status: "Cached; refresh after a GPU change.".to_string(),
         }
     }
 
@@ -295,8 +295,7 @@ impl SettingsState {
                 proton_row.into_any_element(),
             ))
             .child(div().text_size(caption).text_color(muted).child(
-                "Detected from common Proton folders; some builds may not work. \
-                         UMU-Proton (umu-managed) is the safe default.",
+                "Found under compatibilitytools.d; UMU-Proton is the safe default.",
             ));
         if no_wow64 {
             body = body.child(div().text_size(caption).text_color(theme.error).child(
@@ -307,18 +306,17 @@ impl SettingsState {
         body = body
             .child(field_row(
                 theme,
-                "Font (this app):",
+                "Font:",
                 font_row.into_any_element(),
             ))
             .child(field_row(
                 theme,
-                "GPU list (game picker):",
+                "GPU list:",
                 gpu_row.into_any_element(),
             ))
             .child(field_row(theme, "vkBasalt layer dir:", layer))
             .child(div().text_size(caption).text_color(muted).child(
-                "Font applies immediately; prefix/Proton/layer changes apply to the \
-                         next launch. The window follows your desktop colour scheme.",
+                "Font applies immediately; the other changes apply on the next launch.",
             ));
 
         let footer = crate::ui::modal::footer(

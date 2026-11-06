@@ -3,8 +3,7 @@
 //! "  (display)" suffix and the variant notes).
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, ClickEvent, ElementId, FocusHandle, Pixels, SharedString, Window, anchored,
-    deferred, div, point, px,
+    AnyElement, App, ClickEvent, ElementId, FocusHandle, Pixels, SharedString, Window, div, px,
 };
 
 use crate::theme::Theme;
@@ -123,6 +122,7 @@ pub fn combo(
         .id(SharedString::from(format!("{prefix}-popup")))
         .flex()
         .flex_col()
+        .flex_none()
         .w(popup_width)
         .max_h(px(220.))
         .overflow_y_scroll()
@@ -161,14 +161,10 @@ pub fn combo(
         .flex_col();
     wrapper = wrapper.child(trigger);
     if state.open && !state.items.is_empty() {
-        // `deferred` paints the popup above the rest of the window; without it
-        // the anchored card is drawn under the rows that follow the trigger.
-        wrapper = wrapper.child(deferred(
-            anchored()
-                .offset(point(px(0.), px(control_height)))
-                .snap_to_window_with_margin(px(8.))
-                .child(rows),
-        ));
+        // Inline list: an `anchored` popup is clipped to the parent row, so the
+        // options were cut off after a row or two. Expanding in place keeps
+        // every entry reachable inside a scrolling dialog.
+        wrapper = wrapper.child(rows);
     }
     wrapper.into_any_element()
 }
