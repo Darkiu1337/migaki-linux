@@ -124,7 +124,8 @@ pub fn combo(
         .flex_col()
         .flex_none()
         .w(popup_width)
-        .max_h(px(220.))
+        // Whole rows only, so the last visible entry is never cut in half.
+        .max_h(px(row_height * 7.))
         .overflow_y_scroll()
         .bg(popup_bg)
         .border_1()

@@ -22,6 +22,28 @@ pub struct SettingsState {
     pub font: ComboState,
     pub font_size: SpinState,
     pub gpu_status: String,
+    /// How many families the (long) font list currently renders.
+    font_visible: usize,
+}
+
+/// Families render a page at a time: shaping several hundred rows in one
+/// frame stalls the window, and nobody scrolls that far anyway.
+const FONT_PAGE: usize = 60;
+const FONT_MORE: &str = "\u{22ef} show more fonts";
+
+fn font_items(app: &MainView, visible: usize) -> Vec<ComboItem> {
+    let mut items: Vec<ComboItem> =
+        std::iter::once(ComboItem::new("Default (system)", "")).collect();
+    items.extend(
+        app.fonts
+            .iter()
+            .take(visible)
+            .map(|name| ComboItem::new(name.clone(), name.clone())),
+    );
+    if app.fonts.len() > visible {
+        items.push(ComboItem::new(FONT_MORE, "__more__"));
+    }
+    items
 }
 
 fn setting(app: &MainView, key: &str) -> String {
@@ -83,14 +105,8 @@ impl SettingsState {
         let mut proton = ComboState::new(cx, proton_choices);
         proton.selected = proton_selected;
 
-        let font_items = std::iter::once(ComboItem::new("Default (system)", ""))
-            .chain(
-                app.fonts
-                    .iter()
-                    .map(|name| ComboItem::new(name.clone(), name.clone())),
-            )
-            .collect();
-        let mut font = ComboState::new(cx, font_items);
+        let font_visible = FONT_PAGE;
+        let mut font = ComboState::new(cx, font_items(app, font_visible));
         font.select_value(&setting(app, "gui.font"));
 
         let size = app
@@ -107,6 +123,7 @@ impl SettingsState {
             font,
             font_size: SpinState::new(cx, size, 0, 72, Some("Default")),
             gpu_status: "Cached; refresh after a GPU change.".to_string(),
+            font_visible,
         }
     }
 
@@ -200,9 +217,25 @@ impl SettingsState {
                 let entity = entity.clone();
                 move |index, _event, _window, cx| {
                     entity.update(cx, |this, cx| {
+                        let mut reload = None;
                         if let Modal::Settings(state) = &mut this.modal {
-                            state.font.selected = index;
-                            state.font.open = false;
+                            if state.font.items.get(index).map(|item| item.value.as_str())
+                                == Some("__more__")
+                            {
+                                state.font_visible += FONT_PAGE;
+                                reload = Some(state.font_visible);
+                            } else {
+                                state.font.selected = index;
+                                state.font.open = false;
+                            }
+                        }
+                        if let Some(visible) = reload {
+                            let items = font_items(this, visible);
+                            if let Modal::Settings(state) = &mut this.modal {
+                                state.font.items = items;
+                                state.font.selected = 0;
+                                state.font.open = true;
+                            }
                         }
                         cx.notify();
                     });
@@ -231,8 +264,8 @@ impl SettingsState {
         );
         let font_row = div()
             .flex()
-            .flex_row()
-            .items_center()
+            .flex_col()
+            .items_start()
             .gap(px(theme.sm))
             .child(font_combo)
             .child(font_size);

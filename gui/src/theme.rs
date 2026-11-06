@@ -290,7 +290,7 @@ impl Theme {
             focus: with_alpha(foreground, 0.08),
             selected: with_alpha(foreground, 0.18),
             selected_text: accent,
-            scrim: with_alpha(background, 0.5),
+            scrim: with_alpha(background, 0.82),
             error: color(&colors, "red"),
             warning: color(&colors, "yellow"),
             success: color(&colors, "green"),
