@@ -236,6 +236,12 @@ if [ "$DRYRUN" = "1" ]; then
 fi
 
 [ "${MIGAKI_DEBUG:-0}" = "1" ] && set -x
+# rpgmaker-linux sniffs $PWD for a game *before* it parses --gamepath. When
+# $PWD isn't a game it latches `notfound`, then prints "Can't find any game in
+# <gamepath>" and exits 1 once the game quits — the launch itself already
+# worked. Start it inside the game dir (its own default when no --gamepath is
+# given) so the probe finds the same game and the exit status stays truthful.
+cd "$GAMEPATH"
 # No exec (EXIT trap restores the template); clear stale NW.js runtimes first
 # or a single-instance stale process would hijack this launch.
 ak_kill_strays "nw --ozone-platform"
