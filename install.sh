@@ -909,6 +909,68 @@ step_vkbasalt() {
   fi
 }
 
+gamescope_sha() { awk 'NR==1 { print $3 }' "$ROOT/gamescope/base.txt" 2>/dev/null; }
+
+# Installed when the VERSION marker matches the pinned base: a bump in
+# gamescope/base.txt makes the next install.sh rebuild it.
+gamescope_installed() {
+  local v="$HOME/.local/lib/migaki/gamescope/VERSION"
+  [ -f "$v" ] && [ "$(cat "$v" 2>/dev/null)" = "$(gamescope_sha)" ]
+}
+
+step_gamescope_deps() {
+  # Build deps for the gamescope fork. Collected here (before the single
+  # install transaction) like step_vkbasalt's, because add_pkg only queues.
+  if gamescope_installed; then return 0; fi
+  [ "$CHECK_ONLY" = "0" ] || return 0
+  local pkgs p
+  case "$PM" in
+    arch) pkgs="meson ninja glslang vulkan-headers pkgconf gcc" ;;
+    deb)  pkgs="meson ninja-build glslang-tools libvulkan-dev pkg-config build-essential" ;;
+    fed)  pkgs="meson ninja-build glslang vulkan-headers pkgconf gcc gcc-c++" ;;
+    *)    add_note "gamescope build deps (meson, ninja, glslang, Vulkan headers, libXRes; see gamescope/README.md)"
+          return 0 ;;
+  esac
+  for p in $pkgs; do
+    if pkg_available "$p"; then add_pkg "$p"; else add_note "gamescope build dep '$p' not in your repos (upscale may stay unavailable)"; fi
+  done
+  # libXRes supplies the xres.pc meson looks for; the deb/fed names are
+  # unverified, so a miss only warns (the build step reports it).
+  case "$PM" in
+    arch) if pkg_available libxres; then add_pkg libxres; fi ;;
+    deb)  if pkg_available libxres-dev; then add_pkg libxres-dev
+          else add_note "libXRes dev headers (xres.pc; upscale may stay unavailable)"; fi ;;
+    fed)  if pkg_available libXres-devel; then add_pkg libXres-devel
+          else add_note "libXRes dev headers (xres.pc; upscale may stay unavailable)"; fi ;;
+  esac
+  unset p
+}
+
+step_gamescope() {
+  step "gamescope (CuNNy upscale filter)"
+  if gamescope_installed; then
+    ok "gamescope (cunny) already installed ($(cat "$HOME/.local/lib/migaki/gamescope/VERSION" 2>/dev/null))"
+    return 0
+  fi
+  if [ "$CHECK_ONLY" = "1" ]; then
+    note "gamescope (cunny) not installed — upscale unavailable (run ./install.sh)"
+    return 0
+  fi
+  if [ "$DRY_RUN" = "1" ]; then
+    note "would build gamescope with the CuNNy filter into ~/.local/lib/migaki/gamescope"
+    return 0
+  fi
+  # Non-fatal: without it games still launch, just unfiltered.
+  if bash "$ROOT/gamescope/build.sh" --prefix "$HOME/.local/lib/migaki/gamescope"; then
+    ok "gamescope (cunny) installed to ~/.local/lib/migaki/gamescope"
+  else
+    warn "gamescope build failed — games still launch, without the upscale filter."
+    # The queued NOTES were already printed before this step runs, so the
+    # actionable hint has to be a note of its own.
+    note "upscale unavailable: run gamescope/build.sh to see the failing dependency"
+  fi
+}
+
 confirm_and_install_packages() {
   # One confirmation: print exactly what will be installed, then one transaction.
   [ "$CHECK_ONLY" = "0" ] || return 0
@@ -1413,9 +1475,11 @@ main() {
   step_gui_deps
   step_umu
   step_vkbasalt
+  step_gamescope_deps
   confirm_and_install_packages
   step_gui_binary
   step_vkbasalt_build
+  step_gamescope
   step_proton
   step_rpgmaker
   step_textbox_exec

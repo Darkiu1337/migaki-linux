@@ -12,6 +12,13 @@ CONFIG_JSON = os.path.join(CONFIG_DIR, "config.json")
 ICON_CACHE = os.path.expanduser("~/.cache/migaki/icons")
 GPU_CACHE = os.path.expanduser("~/.cache/migaki/gpus.json")
 
+# Per-game upscale profile (observed resolution + recommendation) and the
+# gamescope fork install built by gamescope/build.sh.
+UPSCALE_JSON = os.path.join(CONFIG_DIR, "upscale.json")
+UPSCALE_LOG_DIR = os.path.expanduser("~/.cache/migaki/upscale")
+GAMESCOPE_DIR = os.path.expanduser("~/.local/lib/migaki/gamescope")
+GAMESCOPE_BIN = os.path.join(GAMESCOPE_DIR, "bin", "gamescope")
+
 DEFAULT_PREFIX = os.path.join(os.path.expanduser("~"), ".local/share/migaki/prefixes/default")
 
 RUNNERS = {

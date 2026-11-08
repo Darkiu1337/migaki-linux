@@ -104,6 +104,12 @@ if [ -f "$HOME/.local/share/vkBasalt/.migaki-installed" ] \
   rmdir "$HOME/.local/share/vkBasalt" 2>/dev/null || true
   echo "removed source-built vkBasalt (system packages it pulled in are left alone)."
 fi
+# The gamescope fork built by install.sh (upscale filter). ~/.config/migaki/
+# upscale.json is your data and stays; the cache loop below drops its logs.
+if [ -d "$HOME/.local/lib/migaki/gamescope" ]; then
+  rm -rf "$HOME/.local/lib/migaki/gamescope"
+  echo "removed gamescope (cunny upscaler) build"
+fi
 # Regenerable caches/logs (icon extraction, GUI/translate logs, isolated
 # DeepL browser profile). Your library and config are never touched.
 for cache in "$HOME/.cache/migaki" "$HOME/.cache/anime4k" "$HOME/.cache/vn-translate"; do

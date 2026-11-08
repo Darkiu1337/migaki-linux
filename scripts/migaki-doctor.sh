@@ -206,6 +206,20 @@ else
   unset _out
 fi
 
+# 6b. Packaged gamescope (CuNNy upscale filter). Informational: the filter is
+# opt-in per game, so a missing build is a note, never a failure.
+_GS="$HOME/.local/lib/migaki/gamescope"
+if [ -x "$_GS/bin/gamescope" ]; then
+  if "$_GS/bin/gamescope" --help 2>&1 | grep -q 'cunny =>'; then
+    ok "gamescope (cunny upscaler) $([ -f "$_GS/VERSION" ] && cat "$_GS/VERSION")"
+  else
+    skip "gamescope present at $_GS but it has no cunny filter (rebuild with gamescope/build.sh)"
+  fi
+else
+  skip "gamescope (cunny): not installed — upscale unavailable (run ./install.sh)"
+fi
+unset _GS
+
 # 7. Translation readiness (read-only: presence only, no launches).
 _TDIR="$SCRIPT_DIR/../translate"
 if python3 -c "import websocket, requests" 2>/dev/null; then

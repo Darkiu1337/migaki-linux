@@ -35,6 +35,10 @@ def normalize_edit(data, prev):
     data["runner"] = prev.get("runner", data.get("runner", "proton"))
     if "wow64" in prev:
         data["wow64"] = prev["wow64"]
+    # The wizard has no upscale control; a save from it must not drop the flag
+    # the TUI/CLI set.
+    if "upscale" in prev:
+        data["upscale"] = prev["upscale"]
     tr_prev = prev.get("translate", {})
     tr = data.setdefault("translate", {})
     tr["hook_mode"] = tr_prev.get("hook_mode", "unknown")

@@ -1,4 +1,5 @@
 import os
+import sys
 
 from . import paths, system
 
@@ -32,8 +33,15 @@ def _vn_engine(engine):
     return "tyrano" if engine == "tyrano" else "textractor"
 
 
-def build_command(game):
-    """Argv for a library entry (mirrors the bash runners)."""
+def build_command(game, gid=None):
+    """Argv for a library entry (mirrors the bash runners).
+
+    An entry with `"upscale": "1"` is wrapped in scripts/gamescope-migaki.sh
+    (the CuNNy 2x filter) when the packaged gamescope is installed; `gid` is
+    what lets the wrapper record the run in the per-game upscale profile. The
+    filter name is literal: cunny is the only model validated end to end, and
+    the profile's `filter` field is display-only.
+    """
     runner = game["runner"]
     variant = game.get("variant", "L")
     fps = game.get("fps", "60")
@@ -74,6 +82,20 @@ def build_command(game):
         if lang:
             argv += ["--lang", lang]
         argv.append(path)
+    return _with_upscale(game, gid, argv)
+
+
+def _with_upscale(game, gid, argv):
+    """Wrap a runner argv in the gamescope CuNNy launcher when the game asks
+    for it. A missing build is not fatal: the game still launches, unfiltered,
+    with a warning (the TUI/doctor report the missing install separately)."""
+    if game.get("upscale") != "1":
+        return argv
+    if gid and os.access(paths.GAMESCOPE_BIN, os.X_OK):
+        return [os.path.join(paths.SCRIPTS_DIR, "gamescope-migaki.sh"),
+                "--filter", "cunny", "--gameid", gid, "--"] + argv
+    print("warning: upscale requested but gamescope is not installed — "
+          "launching without the filter", file=sys.stderr)
     return argv
 
 

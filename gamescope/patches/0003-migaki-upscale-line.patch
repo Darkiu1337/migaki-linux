@@ -1,0 +1,24 @@
+diff --git a/src/rendervulkan.cpp b/src/rendervulkan.cpp
+index ef963d5..0762db6 100644
+--- a/src/rendervulkan.cpp
++++ b/src/rendervulkan.cpp
+@@ -4418,6 +4418,19 @@ std::optional<uint64_t> vulkan_composite( struct FrameInfo_t *frameInfo, gamesco
+ 
+ 		update_cunny_buffers(inputX, inputY, outX, outY);
+ 
++		// Machine-readable observation for the Migaki launcher
++		// (scripts/gamescope-migaki.sh --gameid parses this line). Emitted only
++		// when a size changes, so a steady frame loop stays silent.
++		static uint32_t s_lastInW = 0, s_lastInH = 0, s_lastOutW = 0, s_lastOutH = 0;
++		if ( inputX != s_lastInW || inputY != s_lastInH ||
++		     currentOutputWidth != s_lastOutW || currentOutputHeight != s_lastOutH )
++		{
++			s_lastInW = inputX; s_lastInH = inputY;
++			s_lastOutW = currentOutputWidth; s_lastOutH = currentOutputHeight;
++			fprintf( stderr, "MIGAKI_UPSCALE input=%ux%u cnn=%ux%u out=%ux%u\n",
++			         inputX, inputY, outX, outY, currentOutputWidth, currentOutputHeight );
++		}
++
+ 		const int pixelsPerGroup = 8;
+ 
+ 		// Pass 0: RGB -> 16 channels, four feature textures in A

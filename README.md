@@ -34,7 +34,8 @@ The effect is easier to notice while playing than in stills.
 
 *Usage demo — filtered gameplay (Restore L).* Look for cleaner line art,
 calmer gradients, and less compression noise — that is the whole effect.
-Nothing is upscaled; resolution never changes.
+The Restore chain never changes resolution. A separate, per-game opt-in 2x
+upscaler exists (`migaki upscale <id>`); it is off unless you turn it on.
 
 ## Capabilities
 
@@ -48,6 +49,14 @@ Nothing is upscaled; resolution never changes.
   GPU, fps cap, overlay, locale, prefix mode.
 * **A/B comparison** — unfiltered launches structurally withhold the layer, so
   the loader never sees vkBasalt.
+* **Optional 2x upscale** (per game, off by default) — a gamescope built from
+  the pinned fork in `gamescope/` runs the game at its own resolution and
+  doubles it with the CuNNy 4x16-NVL network. Each game keeps a profile in
+  `~/.config/migaki/upscale.json` with the resolution it really renders at and
+  a verdict (`exact`, `downscale`, `upscale`, `disabled`); `migaki upscale
+  <id>` shows it and toggles the flag. The gamescope build is part of
+  `install.sh` and stays out of the way when it is missing. Limits:
+  `docs/limits.md`.
 * **GPU-aware** — an explicit GPU pick is honored; `auto` prefers the GPU that
   drives the active output (what you want on a hybrid laptop); set
   `MIGAKI_FORCE_GPU=1` to force the display renderer instead.
@@ -93,7 +102,8 @@ automatically, and anything else warns with a one-click switch. See
 ```sh
 git clone https://github.com/Darkiu1337/migaki-linux.git && cd migaki-linux
 ./install.sh                 # everything, no questions: deps, GUI, vkBasalt, Proton,
-                             # RPGMaker, shaders, translation, textbox Top, symlinks, entries
+                             # RPGMaker, shaders, translation, textbox Top, the
+                             # CuNNy upscale gamescope, symlinks, entries
 ./install.sh --ask           # same, but confirm each optional piece
 ./install.sh --check-only    # audit only (no changes)
 ./install.sh --dry-run       # show what would be installed
@@ -128,11 +138,15 @@ Bridge stderr is appended to `~/.cache/migaki/gui.log`. Set
 
 ## Layout
 
-* `scripts/` — TUI + per-runner launchers (`proton`, `rpgmaker`, `native`)
+* `scripts/` — TUI + per-runner launchers (`proton`, `rpgmaker`, `native`) and
+  `gamescope-migaki.sh` (the optional 2x upscale launcher)
 * `core/` — Qt-free shared library: store, command building, process mgmt,
   detection, icons (imported by TUI/GUI/textbox). `python3 -m core
-  <launch|add|set|tset|remove|gpus>` is the TUI's write path (one store,
-  backups, validation).
+  <launch|add|set|tset|remove|gpus|upscale-show|upscale-render|upscale-note>`
+  is the TUI's write path (one store, backups, validation).
+* `gamescope/` — provenance of the gamescope fork that carries the CuNNy
+  filter: pinned base, patches, shader sources, `build.sh` (see
+  `gamescope/README.md`)
 * `gui/` — gpui (Rust) frontend: `src/` window/dialogs/theme, `bridge/` the
   NDJSON client for `bridge/main.py`
 * `translate/` — VN translation: hook launcher, DeepL bridge, Luna-style textbox

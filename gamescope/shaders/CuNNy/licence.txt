@@ -1,0 +1,30 @@
+CuNNy 4x16-NVL — https://github.com/Blinue/CuNNy
+
+Model file: magpie/normal/CuNNy-4x16-NVL.hlsl
+Pinned commit: 5724c10e267fcfb19d4a92384e26d813f6c3e648 (2024-09-12)
+Upstream author: funnyplanter / Blinue
+
+The .comp files in this directory are mechanically generated from that HLSL by
+gen_cunny.py. They are derivative works of the model data and the pass structure,
+not of the gamescope codebase, and are therefore NOT relicensed under the
+gamescope MIT licence.
+
+Licence text as found in the HLSL header (verbatim):
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+The CuNNy repository README additionally states LGPL-3.0 for the released
+models. Both notices are recorded here unchanged; no relicensing decision is
+made by this fork. This gamescope tree is a local build for validation only.
+Redistributing binaries that embed these shaders requires a licence review.

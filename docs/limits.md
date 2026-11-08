@@ -178,6 +178,38 @@ warning and take the `HOST_LC_ALL` path, add the locale to
 `/etc/locale.gen` and run `sudo locale-gen`. Set `MIGAKI_NO_HOST_LC_ALL=1`
 to never export `HOST_LC_ALL` (escape hatch if a title still dies with it).
 
+## Upscaling (`upscale` per game, opt-in)
+
+The Restore/Clear presets never change resolution. A separate path does: with
+`upscale=1` on a library entry, `core/commands.py` wraps the runner argv in
+`scripts/gamescope-migaki.sh`, which runs the game under a gamescope built from
+`gamescope/` and applies the CuNNy 4x16-NVL network (fixed 2x) to the game
+window's buffer.
+
+* **Off by default.** The flag is per game (`migaki upscale <id>`,
+  `python3 -m core set <id> upscale 1`). Without the packaged gamescope
+  (`~/.local/lib/migaki/gamescope`) the launcher warns and runs the game
+  normally, unfiltered.
+* **The virtual screen has a single mode, equal to `--render`.** A fullscreen
+  game cannot offer a resolution above it, so `--render` is both floor and
+  ceiling for such titles; changing the base means relaunching with another
+  `--render` (the per-game profile's `render` field). A windowed game (its
+  buffer below the mode) can pick any smaller size on its own.
+* **The filter works on the buffer, not on `--render`.** A game rendering at
+  1920x1080 into a 1920x1080 output leaves nothing to scale, so the network
+  never engages and the profile records `disabled` with the resolution to use
+  instead.
+* **Discovery is two layers.** Runtime observation (the fork prints
+  `MIGAKI_UPSCALE input=… cnn=… out=…`, recorded per game) is universal;
+  engine-config reading exists only for RPGMaker MV/MZ (SRD_GameUpgrade's
+  "Game Resolution", else `package.json`). Ren'Py, Unity, KiriKiri and Godot
+  keep their settings inside packed assets and fall back to the runtime layer.
+* **Translation sessions do not upscale.** `build_translate_command` keeps its
+  own argv (hook + filter in one launch); the upscale wrapper only wraps
+  `build_command`.
+* **2x only.** The profile records a verdict (`exact`, `downscale`, `upscale`,
+  `disabled`) from what was observed; it does not change the network's scale.
+
 ## Interface notes
 
 * **A/B comparison** is structural: the unfiltered run launches with the

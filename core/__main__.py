@@ -1,7 +1,9 @@
 """core CLI — the shell-facing surface used by the TUI.
 
-Commands: launch, add, set, tset, remove, gpus. The GUI imports the modules
-directly; this exists so the bash frontend shares one store/validation path.
+Commands: launch, add, set, tset, remove, gpus, upscale-{show,render,note}.
+The GUI imports the modules directly; this exists so the bash frontend shares
+one store/validation path, and so scripts/gamescope-migaki.sh has a stable
+machine-readable surface for the upscale profile.
 """
 import argparse
 import os
@@ -28,7 +30,7 @@ def _launch(args):
                   "(pick the story thread in the in-app picker)")
         argv = commands.build_translate_command(game, args.gid, setup=setup)
     else:
-        argv = commands.build_command(game)
+        argv = commands.build_command(game, args.gid)
     os.execv(argv[0], argv)
     return 0
 
@@ -45,6 +47,7 @@ def _add(args):
         "hud": args.hud,
         "prefix_mode": args.prefix_mode,
         "lang": args.lang,
+        "upscale": args.upscale,
         "translate": {
             "enabled": args.tr_enabled,
             "hook_code": args.tr_hook,
@@ -95,6 +98,62 @@ def _gpus(args):
     return 0
 
 
+def _upscale_show(args):
+    """Profile + recommendation as one JSON line (the TUI formats it)."""
+    import json
+    from . import upscale
+    prof = upscale.profile(args.gid)
+    rec = upscale.recommend(prof)
+    print(json.dumps(dict(prof, verdict=rec["verdict"], scale=rec["scale"],
+                          recommend=rec), sort_keys=True))
+    return 0
+
+
+def _upscale_render(args):
+    """Emit "<render> <output>" for scripts/gamescope-migaki.sh.
+
+    Resolves the pair when the profile has none yet (engine base, then half
+    the monitor) and persists it, so later launches reuse the same mode."""
+    from . import upscale
+    prof = upscale.profile(args.gid)
+    games = upscale.load()
+    entry = games.get(args.gid) or {}
+    changed = False
+    for field in ("render", "output"):
+        if not entry.get(field):
+            entry[field] = prof[field]
+            changed = True
+    if changed:
+        entry.setdefault("filter", prof["filter"])
+        entry.setdefault("engine", prof["engine"])
+        games[args.gid] = entry
+        upscale.save(games)
+    print("%s %s" % (entry["render"], entry["output"]))
+    return 0
+
+
+def _upscale_note(args):
+    """Record what a run observed (or a manual render/output override) and
+    print one human line."""
+    from . import upscale
+    upscale.note(args.gid, input=args.input, cnn=args.cnn, out=args.out,
+                 render=args.render, output=args.output)
+    prof = upscale.profile(args.gid)
+    rec = upscale.recommend(prof)
+    print("upscale: %s input=%s cnn=%s out=%s"
+          % (rec["verdict"], prof["observed_input"] or "-",
+             prof["observed_cnn"] or "-", prof["output"] or "-"))
+    return 0
+
+
+def _size(value):
+    """argparse type for a WxH size."""
+    parts = value.lower().split("x")
+    if len(parts) != 2 or not all(p.isdigit() and int(p) > 0 for p in parts):
+        raise argparse.ArgumentTypeError("expected WxH, got %r" % value)
+    return value
+
+
 def build_parser():
     ap = argparse.ArgumentParser(prog="python3 -m core")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -115,6 +174,7 @@ def build_parser():
     p.add_argument("--lang", default="")
     p.add_argument("--tr-enabled", default="0")
     p.add_argument("--tr-hook", default="")
+    p.add_argument("--upscale", choices=("0", "1"), default="0")
     p.set_defaults(fn=_add)
 
     for name, fn in (("set", _set), ("tset", _tset)):
@@ -130,6 +190,23 @@ def build_parser():
 
     p = sub.add_parser("gpus")
     p.set_defaults(fn=_gpus)
+
+    p = sub.add_parser("upscale-show")
+    p.add_argument("--gid", required=True)
+    p.set_defaults(fn=_upscale_show)
+
+    p = sub.add_parser("upscale-render")
+    p.add_argument("--gid", required=True)
+    p.set_defaults(fn=_upscale_render)
+
+    p = sub.add_parser("upscale-note")
+    p.add_argument("--gid", required=True)
+    p.add_argument("--input", type=_size)
+    p.add_argument("--cnn", type=_size)
+    p.add_argument("--out", type=_size)
+    p.add_argument("--render", type=_size)
+    p.add_argument("--output", type=_size)
+    p.set_defaults(fn=_upscale_note)
     return ap
 
 

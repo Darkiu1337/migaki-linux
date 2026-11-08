@@ -2,7 +2,7 @@
 # migaki — TUI front-end for the Migaki launchers (gum-based,
 # matching the Omarchy terminal aesthetic).
 #
-# Usage: migaki [launch <name> | add | detect <path> | doctor | list | remove <name> | edit <name> | help]
+# Usage: migaki [launch <name> | add | detect <path> | doctor | list | remove <name> | edit <name> | upscale <name> | help]
 #   No arguments opens the interactive menu.
 # Game library lives in ~/.config/migaki/games.json
 set -e
@@ -261,16 +261,71 @@ cmd_menu() {
       Doctor) "$SCRIPT_DIR/migaki-doctor.sh" || read -r -p "press Enter..." _ ;;
       "Manage games")
         local sub
-        sub="$(gum choose --header "Manage" "List" "Edit" "Remove" "Back")"
+        sub="$(gum choose --header "Manage" "List" "Edit" "Upscale" "Remove" "Back")"
         case "$sub" in
           List) cmd_list ;;
           Edit) cmd_edit ;;
+          Upscale) cmd_upscale ;;
           Remove) cmd_remove ;;
         esac
         ;;
       *) exit 0 ;;
     esac
   done
+}
+
+cmd_upscale() {
+  local id="${1:-}"
+  [ -n "$id" ] || id="$(pick_game)"
+  jq -e ".games[\"$id\"]" "$LIB" >/dev/null || { echo "error: unknown game id '$id'" >&2; exit 1; }
+  local js state
+  js="$(core_cmd upscale-show --gid "$id")" \
+    || { echo "error: could not read the upscale profile for '$id'" >&2; exit 1; }
+  state="$(lib_get upscale "$id")"
+  [ "$state" = "1" ] || state="0"
+  local render output obs_in obs_cnn verdict note engine
+  render="$(jq -r '.render // ""' <<<"$js")"
+  output="$(jq -r '.output // ""' <<<"$js")"
+  obs_in="$(jq -r '.observed_input // ""' <<<"$js")"
+  obs_cnn="$(jq -r '.observed_cnn // ""' <<<"$js")"
+  verdict="$(jq -r '.recommend.verdict // ""' <<<"$js")"
+  note="$(jq -r '.recommend.note // ""' <<<"$js")"
+  engine="$(jq -r '.engine // ""' <<<"$js")"
+  echo "upscale for '$id': $([ "$state" = "1" ] && echo on || echo off)"
+  if [ -n "$engine" ]; then echo "  engine    $engine"; fi
+  echo "  render    $render   (virtual mode: the game's ceiling)"
+  echo "  output    $output"
+  if [ -n "$obs_in" ]; then
+    echo "  observed  ${obs_in} -> ${obs_cnn:-?}"
+  else
+    echo "  observed  not measured yet"
+  fi
+  echo "  verdict   ${verdict:-?}"
+  if [ -n "$note" ]; then echo "  advice    $note"; fi
+  local action
+  action="$(gum choose --header "Upscale" "Turn on" "Turn off" "Change render" "Back")" || exit 0
+  case "$action" in
+    "Turn on")
+      core_cmd set "$id" upscale 1
+      echo "upscale on for '$id'."
+      ;;
+    "Turn off")
+      core_cmd set "$id" upscale 0
+      echo "upscale off for '$id'."
+      ;;
+    "Change render")
+      local new
+      # No --value: gum input appends to a prefilled value, which would make the
+      # user delete the current size first.
+      new="$(gum input --header "Render resolution WxH — currently $render" \
+        --placeholder "$render")"
+      [ -n "$new" ] || exit 0
+      [[ "$new" =~ ^[0-9]+x[0-9]+$ ]] || { echo "error: expected WxH, got '$new'" >&2; exit 1; }
+      core_cmd upscale-note --gid "$id" --render "$new"
+      echo "render for '$id' set to $new (takes effect on the next launch)."
+      ;;
+    *) : ;;
+  esac
 }
 
 cmd_detect() {
@@ -291,7 +346,7 @@ cmd_detect() {
 
 usage() {
   echo "Migaki — game launcher with Anime4K Restore filters"
-  echo "Usage: migaki [launch <id> | add | detect <path> | doctor | list | remove [id] | edit [id] | help]"
+  echo "Usage: migaki [launch <id> | add | detect <path> | doctor | list | remove [id] | edit [id] | upscale [id] | help]"
   echo "  No arguments opens the interactive menu."
 }
 
@@ -304,6 +359,7 @@ case "${1:-menu}" in
   list) cmd_list ;;
   remove) shift; cmd_remove "${1:-}" ;;
   edit) shift; cmd_edit "${1:-}" ;;
+  upscale) shift; cmd_upscale "${1:-}" ;;
   help|--help|-h) usage ;;
   menu) cmd_menu ;;
   *) echo "error: unknown command '$1' (see: migaki help)" >&2; exit 1 ;;

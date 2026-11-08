@@ -246,7 +246,7 @@ class Backend:
         game = store.load_games().get(gid)
         if not game:
             return {"command": ""}
-        return {"command": " ".join(commands.build_command(game))}
+        return {"command": " ".join(commands.build_command(game, gid))}
 
     # -- launching ----------------------------------------------------------
 
@@ -280,7 +280,7 @@ class Backend:
             start_new_session=True, env=env)
 
     def _start_game(self, gid, game, unfiltered):
-        argv = commands.build_command(game)
+        argv = commands.build_command(game, gid)
         env = dict(os.environ)
         if unfiltered:
             for var in paths.VKBASALT_ENV_VARS:
