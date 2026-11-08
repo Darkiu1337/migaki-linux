@@ -318,7 +318,7 @@ pub fn text_field(
     } else {
         state.text.clone().into()
     };
-    let muted = placeholder_shown || showing_off;
+    let muted = placeholder_shown || showing_off || readonly_look;
 
     let mut wrapper = div()
         .id(id)

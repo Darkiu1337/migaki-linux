@@ -20,6 +20,9 @@ def validate_entry(data):
     """None when valid, else a user-facing reason string."""
     if not data.get("path") or not os.path.exists(data["path"]):
         return "That path does not exist."
+    render = data.get("upscale_render")
+    if render and not re.fullmatch(r"[0-9]+x[0-9]+", str(render)):
+        return "The render resolution must be WIDTHxHEIGHT, e.g. 960x720."
     if data.get("runner") == "rpgmaker" and not os.path.isdir(data["path"]):
         return ("The rpgmaker runner needs the game folder, not a file.\n"
                 "Use Detect (or pick the folder containing www/).")
@@ -39,6 +42,9 @@ def normalize_edit(data, prev):
     # that omits the key (an older client) keeps the flag the TUI/CLI set.
     if "upscale" not in data and "upscale" in prev:
         data["upscale"] = prev["upscale"]
+    # Same rule for the shader switch: absent means "not edited here".
+    if "shaders" not in data and "shaders" in prev:
+        data["shaders"] = prev["shaders"]
     tr_prev = prev.get("translate", {})
     tr = data.setdefault("translate", {})
     tr["hook_mode"] = tr_prev.get("hook_mode", "unknown")

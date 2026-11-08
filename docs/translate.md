@@ -6,7 +6,7 @@ Luna-style textbox — composed with the Restore filter in a single launch.
 
 ## Flow
 
-1. **Enable** per game: GUI game wizard/edit (Translation page) or
+1. **Enable** per game: GUI game editor (Translation tab) or
    `migaki edit` → `translate`. Proton/Windows games only. Three hook
    transports exist and are chosen automatically by engine sniffing: native
    VNs use **Textractor** (GDI/engine hooks); Electron/TyranoScript bundles —
@@ -25,7 +25,7 @@ Luna-style textbox — composed with the Restore filter in a single launch.
    paste one via the TUI/JSON if you ever have it.) If Textractor's auto-hooks
    find nothing, tick **Show Textractor during Setup (debug)** in the wizard
    and do the hook ladder manually. Both debug toggles live under a **Debug**
-   heading on the Translation page and are only enabled once translation is on.
+   heading on the Translation tab and are only enabled once translation is on.
 3. **Daily play**: `Translate` (picker never opens; the recorded thread is
    followed). The textbox opens with it. It toggles EN-only / JA+EN. The
    standalone Textbox button just re-opens the reader onto a live session.
@@ -202,7 +202,7 @@ stock-bridge installs simply keep following the selection). Manual control:
 
 Translation drives deepl.com through an isolated Chromium/Brave profile over
 CDP. The browser runs **headless** (`--headless=new`), so no window appears and
-nothing steals focus. Per game, the Translation page has **Show the DeepL
+nothing steals focus. Per game, the Translation tab has **Show the DeepL
 browser window (debug)** — tick it to watch the automation (remembered per
 game; both Translate and Setup Text Hooker honour it). Globally, set
 `"browser_hidden": false` in `translate/config.json`. The browser is

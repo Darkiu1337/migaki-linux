@@ -1,7 +1,12 @@
 //! In-window modal card: scrim over the whole window, centered card with a
 //! title, hairline, body and an optional footer row.
+use std::time::Duration;
+
 use gpui::prelude::*;
-use gpui::{AnyElement, ElementId, FontWeight, MouseButton, Pixels, SharedString, div, px};
+use gpui::{
+    Animation, AnimationExt, AnyElement, FontWeight, MouseButton, Pixels, SharedString, div,
+    ease_out_quint, px,
+};
 
 use crate::theme::Theme;
 
@@ -14,7 +19,7 @@ pub struct ModalCard {
 #[allow(clippy::too_many_arguments)]
 pub fn overlay(
     theme: &Theme,
-    id: impl Into<ElementId>,
+    id: impl Into<SharedString>,
     card: ModalCard,
     body: AnyElement,
     footer: Option<AnyElement>,
@@ -28,7 +33,8 @@ pub fn overlay(
     let title_size = theme.heading;
     let text_color = theme.text;
     let family = theme.ui_font.clone();
-    let id: ElementId = id.into();
+    // SharedString, not ElementId: the id names the card's animation too.
+    let id: SharedString = id.into();
 
     let mut panel = div()
         .id(SharedString::from(format!("card-{id}")))
@@ -52,13 +58,31 @@ pub fn overlay(
                 .child(card.title),
         )
         .child(crate::ui::divider::divider(theme))
-        .child(div().flex_1().min_h(px(0.)).child(body));
+        // The body is clipped to the card: a long page (or an expanded
+        // dropdown) scrolls inside its own viewport instead of painting over
+        // the footer and outside the card.
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h(px(0.))
+                .overflow_hidden()
+                .child(body),
+        );
     if let Some(height) = card.height {
         panel = panel.h(height);
     }
     if let Some(footer) = footer {
         panel = panel.child(footer);
     }
+    // Entrance only (fade + 8px rise): gpui 0.2 has no property transitions, so
+    // hover states stay instant and the dialog never feels delayed.
+    let panel = panel.with_animation(
+        SharedString::from(format!("card-anim-{id}")),
+        Animation::new(Duration::from_millis(160)).with_easing(ease_out_quint()),
+        |panel, t| panel.opacity(t).mt(px((1.0 - t) * 8.0)),
+    );
 
     div()
         .id(SharedString::from(format!("scrim-{id}")))

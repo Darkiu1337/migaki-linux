@@ -51,6 +51,7 @@ pub enum FieldId {
     WizardPath,
     WizardName,
     WizardFps,
+    WizardRender,
     SettingsPrefix,
     SettingsLayer,
     SettingsFontSize,
@@ -59,6 +60,11 @@ pub enum FieldId {
 impl FieldId {
     pub fn is_numeric(self) -> bool {
         matches!(self, FieldId::WizardFps | FieldId::SettingsFontSize)
+    }
+
+    /// Digits plus the "x" separator: the upscale render size.
+    pub fn is_size(self) -> bool {
+        matches!(self, FieldId::WizardRender)
     }
 }
 
@@ -69,6 +75,17 @@ pub enum Modal {
     Threads(ThreadsState),
     Settings(SettingsState),
     Wizard(WizardState),
+}
+
+/// Which dropdown a click or key targets: only one list is open per modal, so
+/// the toggle needs to know its siblings.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ComboKind {
+    WizardVariant,
+    WizardGpu,
+    WizardLang,
+    SettingsProton,
+    SettingsFont,
 }
 
 pub struct MainView {
@@ -757,27 +774,99 @@ impl MainView {
         handled
     }
 
+    /// Open one dropdown of the active modal and close its siblings: two lists
+    /// never stay open together, and a disabled combo ignores the toggle.
+    pub(crate) fn toggle_combo(&mut self, kind: ComboKind, cx: &mut Context<Self>) {
+        let open = {
+            let target = match (&self.modal, kind) {
+                (Modal::Wizard(state), ComboKind::WizardVariant) => Some(&state.variant),
+                (Modal::Wizard(state), ComboKind::WizardGpu) => Some(&state.gpu),
+                (Modal::Wizard(state), ComboKind::WizardLang) => Some(&state.lang),
+                (Modal::Settings(state), ComboKind::SettingsProton) => Some(&state.proton),
+                (Modal::Settings(state), ComboKind::SettingsFont) => Some(&state.font),
+                _ => None,
+            };
+            match target {
+                Some(combo) if combo.enabled => !combo.open,
+                _ => return,
+            }
+        };
+        match &mut self.modal {
+            Modal::Wizard(state) => {
+                state.variant.open = false;
+                state.gpu.open = false;
+                state.lang.open = false;
+                match kind {
+                    ComboKind::WizardVariant => state.variant.open = open,
+                    ComboKind::WizardGpu => state.gpu.open = open,
+                    ComboKind::WizardLang => state.lang.open = open,
+                    _ => {}
+                }
+            }
+            Modal::Settings(state) => {
+                state.proton.open = false;
+                state.font.open = false;
+                match kind {
+                    ComboKind::SettingsProton => state.proton.open = open,
+                    ComboKind::SettingsFont => state.font.open = open,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        cx.notify();
+    }
+
     /// The dropdown whose trigger owns focus, if any (Tab cycles into them).
     fn focused_combo(&mut self, window: &Window) -> Option<&mut ComboState> {
         match &mut self.modal {
             Modal::Settings(state) => {
-                if state.proton.focus.is_focused(window) {
+                if state.proton.focus.is_focused(window) && state.proton.enabled {
                     return Some(&mut state.proton);
                 }
-                if state.font.focus.is_focused(window) {
+                if state.font.focus.is_focused(window) && state.font.enabled {
                     return Some(&mut state.font);
                 }
                 None
             }
             Modal::Wizard(state) => {
-                if state.variant.focus.is_focused(window) {
+                if state.variant.focus.is_focused(window) && state.variant.enabled {
                     return Some(&mut state.variant);
                 }
-                if state.gpu.focus.is_focused(window) {
+                if state.gpu.focus.is_focused(window) && state.gpu.enabled {
                     return Some(&mut state.gpu);
                 }
-                if state.lang.focus.is_focused(window) {
+                if state.lang.focus.is_focused(window) && state.lang.enabled {
                     return Some(&mut state.lang);
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// The same lookup without a mutable borrow: Enter/Space go through
+    /// `toggle_combo` so the keyboard honours the one-open-at-a-time rule.
+    fn focused_combo_kind(&self, window: &Window) -> Option<ComboKind> {
+        match &self.modal {
+            Modal::Settings(state) => {
+                if state.proton.focus.is_focused(window) && state.proton.enabled {
+                    return Some(ComboKind::SettingsProton);
+                }
+                if state.font.focus.is_focused(window) && state.font.enabled {
+                    return Some(ComboKind::SettingsFont);
+                }
+                None
+            }
+            Modal::Wizard(state) => {
+                if state.variant.focus.is_focused(window) && state.variant.enabled {
+                    return Some(ComboKind::WizardVariant);
+                }
+                if state.gpu.focus.is_focused(window) && state.gpu.enabled {
+                    return Some(ComboKind::WizardGpu);
+                }
+                if state.lang.focus.is_focused(window) && state.lang.enabled {
+                    return Some(ComboKind::WizardLang);
                 }
                 None
             }
@@ -787,16 +876,21 @@ impl MainView {
 
     /// Enter/Space open the focused dropdown; Up/Down move inside it.
     fn combo_key(&mut self, key: &str, window: &Window, cx: &mut Context<Self>) -> bool {
-        let Some(combo) = self.focused_combo(window) else {
-            return false;
-        };
         match key {
-            "enter" | "return" | "space" => {
-                combo.open = !combo.open;
-                cx.notify();
-                true
-            }
-            "up" | "down" if combo.open && !combo.items.is_empty() => {
+            "enter" | "return" | "space" => match self.focused_combo_kind(window) {
+                Some(kind) => {
+                    self.toggle_combo(kind, cx);
+                    true
+                }
+                None => false,
+            },
+            "up" | "down" => {
+                let Some(combo) = self.focused_combo(window) else {
+                    return false;
+                };
+                if !combo.open || combo.items.is_empty() {
+                    return false;
+                }
                 let last = combo.items.len() - 1;
                 let step: isize = if key == "up" { -1 } else { 1 };
                 let next = (combo.selected as isize + step).clamp(0, last as isize) as usize;
@@ -876,14 +970,20 @@ impl MainView {
                 state.font_size.field.focus.clone(),
                 state.layer.focus.clone(),
             ],
-            Modal::Wizard(state) => vec![
-                state.path.focus.clone(),
-                state.variant.focus.clone(),
-                state.gpu.focus.clone(),
-                state.fps.field.focus.clone(),
-                state.lang.focus.clone(),
-                state.name.focus.clone(),
-            ],
+            Modal::Wizard(state) => {
+                let mut handles = vec![state.path.focus.clone()];
+                if state.variant.enabled {
+                    handles.push(state.variant.focus.clone());
+                }
+                handles.extend([
+                    state.gpu.focus.clone(),
+                    state.fps.field.focus.clone(),
+                    state.render.focus.clone(),
+                    state.lang.focus.clone(),
+                    state.name.focus.clone(),
+                ]);
+                handles
+            }
             _ => Vec::new(),
         }
     }
@@ -895,6 +995,7 @@ impl MainView {
             (Modal::Wizard(state), FieldId::WizardPath) => Some(&mut state.path),
             (Modal::Wizard(state), FieldId::WizardName) => Some(&mut state.name),
             (Modal::Wizard(state), FieldId::WizardFps) => Some(&mut state.fps.field),
+            (Modal::Wizard(state), FieldId::WizardRender) => Some(&mut state.render),
             (Modal::Settings(state), FieldId::SettingsPrefix) => Some(&mut state.prefix),
             (Modal::Settings(state), FieldId::SettingsLayer) => Some(&mut state.layer),
             (Modal::Settings(state), FieldId::SettingsFontSize) => Some(&mut state.font_size.field),
@@ -907,6 +1008,7 @@ impl MainView {
             (Modal::Wizard(state), FieldId::WizardPath) => Some(&state.path),
             (Modal::Wizard(state), FieldId::WizardName) => Some(&state.name),
             (Modal::Wizard(state), FieldId::WizardFps) => Some(&state.fps.field),
+            (Modal::Wizard(state), FieldId::WizardRender) => Some(&state.render),
             (Modal::Settings(state), FieldId::SettingsPrefix) => Some(&state.prefix),
             (Modal::Settings(state), FieldId::SettingsLayer) => Some(&state.layer),
             (Modal::Settings(state), FieldId::SettingsFontSize) => Some(&state.font_size.field),
@@ -921,11 +1023,12 @@ impl MainView {
     }
 
     fn focused_field_id(&self, window: &Window, cx: &App) -> Option<FieldId> {
-        let candidates: [(FieldId, &FocusHandle); 6] = match &self.modal {
+        let candidates: [(FieldId, &FocusHandle); 7] = match &self.modal {
             Modal::Wizard(state) => [
                 (FieldId::WizardPath, &state.path.focus),
                 (FieldId::WizardName, &state.name.focus),
                 (FieldId::WizardFps, &state.fps.field.focus),
+                (FieldId::WizardRender, &state.render.focus),
                 (FieldId::WizardPath, &state.path.focus),
                 (FieldId::WizardPath, &state.path.focus),
                 (FieldId::WizardPath, &state.path.focus),
@@ -934,6 +1037,7 @@ impl MainView {
                 (FieldId::SettingsPrefix, &state.prefix.focus),
                 (FieldId::SettingsLayer, &state.layer.focus),
                 (FieldId::SettingsFontSize, &state.font_size.field.focus),
+                (FieldId::SettingsPrefix, &state.prefix.focus),
                 (FieldId::SettingsPrefix, &state.prefix.focus),
                 (FieldId::SettingsPrefix, &state.prefix.focus),
                 (FieldId::SettingsPrefix, &state.prefix.focus),
@@ -1037,6 +1141,16 @@ impl EntityInputHandler for MainView {
                 return;
             }
             digits
+        } else if id.is_size() {
+            let size: String = new_text
+                .chars()
+                .filter(|c| c.is_ascii_digit() || *c == 'x' || *c == 'X')
+                .map(|c| c.to_ascii_lowercase())
+                .collect();
+            if size.is_empty() && !new_text.is_empty() {
+                return;
+            }
+            size
         } else {
             new_text.to_string()
         };

@@ -1,25 +1,46 @@
-//! Add/edit game wizard: runner, location, filter/performance, name and
-//! translation, ported from `Wizard.qml`.
+//! Add/edit game dialog: one card with a tab strip (Game, System, Performance,
+//! Translation), ported from `Wizard.qml`.
 //!
 //! The state is built when the dialog opens (`open_wizard`); editing an
 //! existing game fills it from `game.data` once the bridge answers. Detect and
 //! path picks both run `reconcile` so the runner always points at a launchable
-//! target.
+//! target. The footer saves in place, and Save stays disabled until the
+//! required fields are set.
+use std::time::Duration;
+
 use gpui::prelude::*;
-use gpui::{AnyElement, ClickEvent, FontWeight, SharedString, Window, div, px};
+use gpui::{
+    Animation, AnimationExt, AnyElement, ClickEvent, FontWeight, SharedString, Window, div,
+    ease_out_quint, px,
+};
 use serde_json::{Value, json};
 
-use crate::app::{FieldId, MainView, Modal};
+use crate::app::{ComboKind, FieldId, MainView, Modal};
 use crate::theme::Theme;
 use crate::ui::button::{Variant, button, section_label};
 use crate::ui::checkbox::checkbox;
 use crate::ui::combo::{ComboItem, ComboState, combo};
+use crate::ui::divider::divider;
 use crate::ui::modal::{ModalCard, footer_split, overlay};
 use crate::ui::spin::{SpinState, spin};
+use crate::ui::tabs::tab_bar;
 use crate::ui::text_field::{FieldState, text_field};
 
-/// Page count: runner, location, performance, name, translation.
-const PAGES: usize = 5;
+/// Tab labels in strip order; `self.page` is the index into both.
+const TABS: [(&str, &str); 4] = [
+    ("game", "Game"),
+    ("system", "System"),
+    ("visuals", "Visuals"),
+    ("translation", "Translation"),
+];
+const PAGES: usize = TABS.len();
+
+/// Fade-in of a tab's content; short enough that switching tabs is instant.
+const PAGE_FADE: Duration = Duration::from_millis(120);
+
+const RENDER_NOTE: &str = "Render is the virtual mode gamescope exposes; a game that changes \
+     resolution while running can only pick sizes up to it. Unchecked keeps the automatic \
+     value (engine base, else half the monitor).";
 
 const DETECT_TIP: &str = "Tip: Detect picks the runner from the game files.";
 
@@ -41,7 +62,10 @@ pub struct WizardState {
     pub gpu: ComboState,
     pub lang: ComboState,
     pub hud: bool,
+    pub shaders: bool,
     pub upscale: bool,
+    pub render_set: bool,
+    pub render: FieldState,
     pub upscale_info: String,
     pub prefix_game: bool,
     pub tr_enable: bool,
@@ -239,6 +263,14 @@ fn reconcile(
 }
 
 impl WizardState {
+    /// The required fields: a game location and a runner. Existence is not
+    /// stat'ed per frame (a removable or NFS path would stall the animated UI);
+    /// the bridge's `validate_entry` still checks it on save and its message
+    /// lands in `err`.
+    pub fn can_save(&self) -> bool {
+        !self.path.text.trim().is_empty() && !self.runner.is_empty()
+    }
+
     /// Refill the GPU dropdown when the background probe reports its list,
     /// keeping the current pick (by value) selected.
     pub(crate) fn refresh_gpus(&mut self, app: &MainView) {
@@ -264,7 +296,10 @@ impl WizardState {
             gpu,
             lang,
             hud: false,
+            shaders: true,
             upscale: false,
+            render_set: false,
+            render: FieldState::new(cx),
             upscale_info: String::new(),
             prefix_game: false,
             tr_enable: false,
@@ -297,8 +332,20 @@ impl WizardState {
         };
         self.fps.set_value(value);
         self.hud = text_of(data, "hud") == "1";
+        self.shaders = text_of(data, "shaders") != "0";
         self.upscale = text_of(data, "upscale") == "1";
+        // The variant only matters while the in-game chain runs.
+        self.variant.enabled = self.shaders && !self.upscale;
         self.upscale_info = upscale_line(data.get("upscale_profile"));
+        if let Some(profile) = data.get("upscale_profile") {
+            // Only an explicit user choice checks the box; a render the runs
+            // resolved themselves must not look like one.
+            self.render_set = profile
+                .get("render_set")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            self.render.set_text(text_of(profile, "render"));
+        }
         let lang = text_of(data, "lang");
         if !lang.is_empty() && !self.lang.select_value(&lang) {
             self.lang.items.push(ComboItem::new(lang.clone(), lang));
@@ -355,7 +402,13 @@ impl WizardState {
             "gpu": self.gpu.value(),
             "fps": if fps == 0 { "off".to_string() } else { fps.to_string() },
             "hud": if self.hud { "1" } else { "0" },
+            "shaders": if self.shaders { "1" } else { "0" },
             "upscale": if self.upscale { "1" } else { "0" },
+            "upscale_render": if self.render_set {
+                self.render.text.trim().to_string()
+            } else {
+                String::new()
+            },
             "lang": self.lang.value(),
             "prefix_mode": if self.prefix_game { "game" } else { "shared" },
             "translate": {
@@ -407,21 +460,54 @@ impl WizardState {
     ) -> AnyElement {
         let theme = &app.theme;
         let page = match self.page {
-            0 => self.page_runner(app, cx),
-            1 => self.page_location(app, window, cx),
-            2 => self.page_performance(app, window, cx),
-            3 => self.page_name(app, window, cx),
+            0 => self.page_game(app, window, cx),
+            1 => self.page_system(app, window, cx),
+            2 => self.page_visuals(app, window, cx),
             _ => self.page_translation(app, cx),
         };
-
-        let mut body = div().flex().flex_col().gap(px(theme.lg)).child(
-            div()
-                .id("wizard-pages")
-                .flex_1()
-                .min_h(px(0.))
-                .overflow_y_scroll()
-                .child(page),
+        // The animation id carries the tab index, so every switch fades the new
+        // page in instead of reusing the finished one.
+        let page = div()
+            .child(page)
+            .with_animation(
+                SharedString::from(format!("wizard-page-{}", self.page)),
+                Animation::new(PAGE_FADE).with_easing(ease_out_quint()),
+                |page, t| page.opacity(t),
+            );
+        let entity = cx.entity();
+        let tabs = tab_bar(
+            theme,
+            "wizard-tab",
+            &TABS,
+            self.page,
+            move |index, _event, _window, cx| {
+                entity.update(cx, |this, cx| {
+                    if let Modal::Wizard(state) = &mut this.modal {
+                        state.page = index;
+                        state.variant.open = false;
+                        state.gpu.open = false;
+                        state.lang.open = false;
+                    }
+                    cx.notify();
+                });
+            },
         );
+
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h(px(0.))
+            .gap(px(theme.lg))
+            .child(tabs)
+            .child(
+                div()
+                    .id("wizard-pages")
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_y_scroll()
+                    .child(page),
+            );
         if !self.err.is_empty() {
             body = body.child(
                 div()
@@ -442,40 +528,25 @@ impl WizardState {
                 cx.notify();
             }),
         );
-        let back = button(
+        let save = button(
             theme,
-            "wizard-back",
-            "Back",
-            self.page > 0,
-            Variant::Normal,
-            cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.page = state.page.saturating_sub(1);
-                }
-                cx.notify();
-            }),
-        );
-        let label = if self.page + 1 >= PAGES {
-            "Finish"
-        } else {
-            "Next"
-        };
-        let next = button(
-            theme,
-            "wizard-next",
-            label,
-            true,
+            "wizard-save",
+            if self.gid.is_empty() { "Add game" } else { "Save" },
+            self.can_save(),
             Variant::Normal,
             cx.listener(|this, _event: &ClickEvent, window, cx| {
-                let last = matches!(&this.modal, Modal::Wizard(state) if state.page + 1 >= PAGES);
-                if last {
-                    this.finish_wizard(window, cx);
-                } else if let Modal::Wizard(state) = &mut this.modal {
-                    state.page = (state.page + 1).min(PAGES - 1);
-                }
-                cx.notify();
+                this.finish_wizard(window, cx);
             }),
         );
+        let mut leading = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(theme.lg))
+            .child(cancel);
+        if !self.can_save() {
+            leading = leading.child(muted_line(theme, "Set the game location to save."));
+        }
 
         let title = if self.gid.is_empty() {
             "Add game"
@@ -491,8 +562,28 @@ impl WizardState {
                 height: Some(px(560.)),
             },
             body.into_any_element(),
-            Some(footer_split(theme, cancel, vec![back, next])),
+            Some(footer_split(theme, leading.into_any_element(), vec![save])),
         )
+    }
+
+    /// Game tab: how it launches (runner), where it lives, and its name.
+    fn page_game(
+        &self,
+        app: &MainView,
+        window: &Window,
+        cx: &mut Context<MainView>,
+    ) -> AnyElement {
+        let theme = &app.theme;
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(theme.lg))
+            .child(self.page_runner(app, cx))
+            .child(divider(theme))
+            .child(self.page_location(app, window, cx))
+            .child(divider(theme))
+            .child(self.page_name(app, window, cx))
+            .into_any_element()
     }
 
     fn page_runner(&self, app: &MainView, cx: &mut Context<MainView>) -> AnyElement {
@@ -682,7 +773,8 @@ impl WizardState {
             .into_any_element()
     }
 
-    fn page_performance(
+    /// System tab: GPU, language, FPS cap and the Wine prefix choice.
+    fn page_system(
         &self,
         app: &MainView,
         window: &Window,
@@ -690,31 +782,6 @@ impl WizardState {
     ) -> AnyElement {
         let theme = &app.theme;
         let entity = cx.entity();
-        let variant = combo(
-            theme,
-            "wizard-variant",
-            "wizard-variant",
-            &self.variant,
-            None,
-            cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.variant.open = !state.variant.open;
-                }
-                cx.notify();
-            }),
-            {
-                let entity = entity.clone();
-                move |index, _event, _window, cx| {
-                    entity.update(cx, |this, cx| {
-                        if let Modal::Wizard(state) = &mut this.modal {
-                            state.variant.selected = index;
-                            state.variant.open = false;
-                        }
-                        cx.notify();
-                    });
-                }
-            },
-        );
         let gpu = combo(
             theme,
             "wizard-gpu",
@@ -722,10 +789,7 @@ impl WizardState {
             &self.gpu,
             None,
             cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.gpu.open = !state.gpu.open;
-                }
-                cx.notify();
+                this.toggle_combo(ComboKind::WizardGpu, cx);
             }),
             {
                 let entity = entity.clone();
@@ -760,36 +824,6 @@ impl WizardState {
                 }
             },
         );
-        let hud = checkbox(
-            theme,
-            "wizard-hud",
-            "Show fps overlay while playing",
-            self.hud,
-            true,
-            cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.hud = !state.hud;
-                }
-                cx.notify();
-            }),
-        );
-        let upscale = checkbox(
-            theme,
-            "wizard-upscale",
-            "2x upscale (gamescope + CuNNy)",
-            self.upscale,
-            true,
-            cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.upscale = !state.upscale;
-                }
-                cx.notify();
-            }),
-        );
-        let upscale_note = div()
-            .text_size(px(theme.body_small))
-            .text_color(theme.text_secondary)
-            .child(self.upscale_info.clone());
         let lang = combo(
             theme,
             "wizard-lang",
@@ -797,10 +831,7 @@ impl WizardState {
             &self.lang,
             None,
             cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.lang.open = !state.lang.open;
-                }
-                cx.notify();
+                this.toggle_combo(ComboKind::WizardLang, cx);
             }),
             {
                 let entity = entity.clone();
@@ -834,8 +865,7 @@ impl WizardState {
             .flex()
             .flex_col()
             .gap(px(theme.lg))
-            .child(section_label(theme, "Filter and performance"))
-            .child(field_row(theme, "Variant:", variant))
+            .child(section_label(theme, "System"))
             .child(field_row(theme, "Game GPU:", gpu));
         if mismatch {
             column = column.child(
@@ -846,12 +876,146 @@ impl WizardState {
             );
         }
         column
+            .child(field_row(theme, "Language:", lang))
             .child(field_row(theme, "FPS cap (0 = off):", fps))
+            .child(prefix)
+            .into_any_element()
+    }
+
+    /// Visuals tab: the shader switch and the variant it owns, the overlay, the
+    /// 2x upscale and the render mode it exposes.
+    fn page_visuals(
+        &self,
+        app: &MainView,
+        window: &Window,
+        cx: &mut Context<MainView>,
+    ) -> AnyElement {
+        let theme = &app.theme;
+        let entity = cx.entity();
+        let variant = combo(
+            theme,
+            "wizard-variant",
+            "wizard-variant",
+            &self.variant,
+            None,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                this.toggle_combo(ComboKind::WizardVariant, cx);
+            }),
+            {
+                let entity = entity.clone();
+                move |index, _event, _window, cx| {
+                    entity.update(cx, |this, cx| {
+                        if let Modal::Wizard(state) = &mut this.modal {
+                            state.variant.selected = index;
+                            state.variant.open = false;
+                        }
+                        cx.notify();
+                    });
+                }
+            },
+        );
+        let hud = checkbox(
+            theme,
+            "wizard-hud",
+            "Show fps overlay while playing",
+            self.hud,
+            true,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.hud = !state.hud;
+                }
+                cx.notify();
+            }),
+        );
+        // The CuNNy wrapper disables vkBasalt itself, so the in-game chain and
+        // the 2x upscale are mutually exclusive; grey the switch out while the
+        // upscaler owns the frame.
+        let shaders = checkbox(
+            theme,
+            "wizard-shaders",
+            "Anime4K shaders (off while 2x upscale is on)",
+            self.shaders,
+            !self.upscale,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.shaders = !state.shaders;
+                    state.variant.enabled = state.shaders && !state.upscale;
+                    if !state.variant.enabled {
+                        state.variant.open = false;
+                    }
+                }
+                cx.notify();
+            }),
+        );
+        let upscale = checkbox(
+            theme,
+            "wizard-upscale",
+            "2x upscale (gamescope + CuNNy)",
+            self.upscale,
+            true,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.upscale = !state.upscale;
+                    state.variant.enabled = state.shaders && !state.upscale;
+                    if !state.variant.enabled {
+                        state.variant.open = false;
+                    }
+                }
+                cx.notify();
+            }),
+        );
+        let upscale_note = div()
+            .text_size(px(theme.body_small))
+            .text_color(theme.text_secondary)
+            .child(self.upscale_info.clone());
+        let render_toggle = checkbox(
+            theme,
+            "wizard-render",
+            "Set the render resolution (gamescope -w/-h)",
+            self.render_set,
+            true,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.render_set = !state.render_set;
+                    if state.render_set && state.render.text.trim().is_empty() {
+                        state.render.set_text("960x720");
+                    }
+                }
+                cx.notify();
+            }),
+        );
+        let render_field = text_field(
+            theme,
+            entity.clone(),
+            SharedString::from("wizard-render-field"),
+            FieldId::WizardRender,
+            &self.render,
+            window,
+            "WIDTHxHEIGHT, e.g. 960x720",
+            None,
+            Some(px(200.)),
+            !self.render_set,
+        );
+        let render_row = div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(theme.xxl))
+            .child(render_toggle)
+            .child(render_field);
+
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(theme.lg))
+            .child(section_label(theme, "Filter and performance"))
+            .child(shaders)
+            .child(field_row(theme, "Variant:", variant))
             .child(hud)
             .child(upscale)
             .child(upscale_note)
-            .child(field_row(theme, "Language:", lang))
-            .child(prefix)
+            .child(render_row)
+            .child(muted_line(theme, RENDER_NOTE))
             .into_any_element()
     }
 
@@ -995,7 +1159,9 @@ impl MainView {
                 true
             }
             "enter" | "return" => {
-                self.finish_wizard(window, cx);
+                if matches!(&self.modal, Modal::Wizard(state) if state.can_save()) {
+                    self.finish_wizard(window, cx);
+                }
                 true
             }
             _ => false,

@@ -190,6 +190,21 @@ window's buffer.
   `python3 -m core set <id> upscale 1`). Without the packaged gamescope
   (`~/.local/lib/migaki/gamescope`) the launcher warns and runs the game
   normally, unfiltered.
+* **The in-game shader chain and the upscaler are exclusive.** The wrapper
+  keeps the runner's vkBasalt chain out of the process (that is what makes
+  CuNNy the only filter on the frame), so the wizard greys the shader switch
+  out while `upscale=1`.
+* **The render size can be pinned.** `upscale.json`'s `render` is normally
+  resolved (the engine's own base, else half the monitor); the GUI wizard's
+  "Set the render resolution" writes it explicitly (`render_set` is the marker
+  of that choice), and clearing it restores the automatic value. A run records
+  `render` without the marker, so launching never checks the box on its own.
+* **Stopping a run still records it.** The GUI stops the launch's whole process
+  group, so gamescope and `tee` end while the wrapper — which ignores TERM by
+  design — writes its observation (`observed_input`/`observed_cnn`/`verdict`)
+  before exiting. The runners' takeover cleanup (`ak_kill_strays`) spares its
+  own ancestor chain, so it no longer SIGKILLs the wrapper of the very run it is
+  starting (the wrapper's argv carries the game path too).
 * **The virtual screen has a single mode, equal to `--render`.** A fullscreen
   game cannot offer a resolution above it, so `--render` is both floor and
   ceiling for such titles; changing the base means relaunching with another
@@ -206,14 +221,16 @@ window's buffer.
   keep their settings inside packed assets and fall back to the runtime layer.
 * **Translation sessions do not upscale.** `build_translate_command` keeps its
   own argv (hook + filter in one launch); the upscale wrapper only wraps
-  `build_command`.
+  `build_command`. With `shaders=0` the session keeps the text hook and drops
+  the filter (the layer is scrubbed like any unfiltered launch).
 * **2x only.** The profile records a verdict (`exact`, `downscale`, `upscale`,
   `disabled`) from what was observed; it does not change the network's scale.
 
 ## Interface notes
 
 * **A/B comparison** is structural: the unfiltered run launches with the
-  layer environment entirely withheld, so the loader never sees vkBasalt.
+  layer environment entirely withheld, and it also drops `--hud` and the
+  gamescope/CuNNy wrapper, so only the shader chain is the difference.
   (Relying on the loader's disable flag is unreliable for explicitly-listed
   layers.) Proof: unfiltered logs contain zero vkBasalt lines.
 * **Game icons** (GUI): extracted from Windows `.exe` files (`icoextract`),

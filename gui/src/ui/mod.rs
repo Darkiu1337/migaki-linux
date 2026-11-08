@@ -5,4 +5,5 @@ pub mod divider;
 pub mod modal;
 pub mod scroll;
 pub mod spin;
+pub mod tabs;
 pub mod text_field;

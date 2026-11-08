@@ -140,25 +140,33 @@ ak_wow64_env() {
 
 # Kill leftover processes of a previous run of the SAME game (best effort).
 # The token is matched against full command lines; the first character is
-# bracketed so pkill can never match our own command line. Own PID and
-# parent are always spared. Never fails (missing pgrep/pkill included).
+# bracketed so pkill can never match our own command line. This process and
+# every ancestor are always spared: under the 2x upscale wrapper the runner is
+# a grandchild of `gamescope-migaki.sh`, whose own argv carries the game path
+# (it is the shell that records what the run observed), so killing the whole
+# match set used to SIGKILL the wrapper two seconds into every launch.
+# Never fails (missing pgrep/pkill included).
 # Example: ak_kill_strays "Spooky Milk Life" ; ak_kill_strays "nw --ozone-platform"
 ak_kill_strays() {
-  local token="$1" pat pids pid
+  local token="$1" pat pids pid spared
   [ -n "$token" ] || return 0
   command -v pgrep >/dev/null 2>&1 || return 0
+  spared=" "
+  pid=$$
+  while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
+    spared="$spared$pid "
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
   pat="[${token:0:1}]${token:1}"
   pids="$(pgrep -f "$pat" 2>/dev/null || true)"
   [ -z "$pids" ] && return 0
   for pid in $pids; do
-    [ "$pid" = "$$" ] && continue
-    [ "$pid" = "$PPID" ] && continue
+    case "$spared" in *" $pid "*) continue ;; esac
     kill -TERM "$pid" 2>/dev/null || true
   done
   sleep 2
   for pid in $pids; do
-    [ "$pid" = "$$" ] && continue
-    [ "$pid" = "$PPID" ] && continue
+    case "$spared" in *" $pid "*) continue ;; esac
     if kill -0 "$pid" 2>/dev/null; then
       ak_log "cleaned stray processes matching '$token'"
       kill -KILL "$pid" 2>/dev/null || true

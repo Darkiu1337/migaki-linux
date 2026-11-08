@@ -46,15 +46,18 @@ upscaler exists (`migaki upscale <id>`); it is off unless you turn it on.
   WoW64, so 32-bit games present a 64-bit Vulkan swapchain the layer can hook
   (opt out per game with `wow64=0` if a title refuses it).
 * **Per-game library** (TUI + gpui GUI sharing one JSON store): variant,
-  GPU, fps cap, overlay, locale, prefix mode.
-* **A/B comparison** — unfiltered launches structurally withhold the layer, so
-  the loader never sees vkBasalt.
+  GPU, fps cap, overlay, locale, prefix mode, a **shader on/off switch** and
+  the optional 2x upscale.
+* **A/B comparison** — the unfiltered launch withholds the layer, the overlay
+  and the upscale wrapper, so the loader never sees vkBasalt and the frame is
+  a plain single-pass render.
 * **Optional 2x upscale** (per game, off by default) — a gamescope built from
   the pinned fork in `gamescope/` runs the game at its own resolution and
   doubles it with the CuNNy 4x16-NVL network. Each game keeps a profile in
   `~/.config/migaki/upscale.json` with the resolution it really renders at and
   a verdict (`exact`, `downscale`, `upscale`, `disabled`); `migaki upscale
-  <id>` shows it and toggles the flag. The gamescope build is part of
+  <id>` shows it and toggles the flag, and the GUI wizard can pin the render
+  size explicitly. The gamescope build is part of
   `install.sh` and stays out of the way when it is missing. Limits:
   `docs/limits.md`.
 * **GPU-aware** — an explicit GPU pick is honored; `auto` prefers the GPU that
@@ -123,7 +126,10 @@ pieces again (shaders, symlinks, desktop entries, GNOME extension, caches) — i
 never touches your game library or config.
 
 In the GUI the top bar has **Settings** and **Quit**; everything else is
-per-game in the wizard and the game list.
+per-game in the editor and the game list. The editor is one tabbed card —
+**Game** (runner, location, name), **System** (GPU, language, FPS cap, prefix),
+**Visuals** (shaders and variant, overlay, 2x upscale, render) and
+**Translation** — and its Save stays disabled until the game location is set.
 
 ## Troubleshooting
 

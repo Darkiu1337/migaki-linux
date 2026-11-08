@@ -20,6 +20,10 @@ def _launch(args):
     if not os.path.exists(path):
         print(f"error: path no longer exists: {path}", file=sys.stderr)
         return 1
+    # `"shaders": "0"` scrubs the layer so the runner exports no vkBasalt at
+    # all; the translate chain keeps its text hook but loses the filter.
+    if commands.filter_disabled(game):
+        commands.disable_filter_env(os.environ)
     tr = game.get("translate") or {}
     if game.get("runner", "proton") == "proton" and tr.get("enabled") == "1":
         hook_saved = bool((tr.get("hook_code") or "").strip()
@@ -48,6 +52,7 @@ def _add(args):
         "prefix_mode": args.prefix_mode,
         "lang": args.lang,
         "upscale": args.upscale,
+        "shaders": args.shaders,
         "translate": {
             "enabled": args.tr_enabled,
             "hook_code": args.tr_hook,
@@ -175,6 +180,7 @@ def build_parser():
     p.add_argument("--tr-enabled", default="0")
     p.add_argument("--tr-hook", default="")
     p.add_argument("--upscale", choices=("0", "1"), default="0")
+    p.add_argument("--shaders", choices=("0", "1"), default="1")
     p.set_defaults(fn=_add)
 
     for name, fn in (("set", _set), ("tset", _tset)):

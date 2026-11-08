@@ -161,6 +161,9 @@ def profile(gid):
     base = engine_base(path, runner)
     return {
         "render": saved.get("render") or base or default_render(mon),
+        # `render` alone is what a run resolved, so only a real user choice
+        # carries the marker the wizard's checkbox reads.
+        "render_set": bool(saved.get("render_set")),
         "output": saved.get("output") or "%dx%d" % mon,
         "filter": saved.get("filter") or "cunny",
         "observed_input": saved.get("observed_input", ""),
@@ -269,6 +272,29 @@ def note(gid, input=None, cnn=None, out=None, render=None, output=None):
     games[gid] = entry
     save(games)
     return rec
+
+
+def set_render(gid, value):
+    """Persist (`"WxH"`) or clear (`""`) the explicit render override.
+
+    Clearing drops only the override: `profile` falls back to the engine's own
+    base, then half the monitor. A game with no other recorded state leaves
+    `upscale.json` instead of keeping an empty record."""
+    games = load()
+    entry = dict(games.get(gid) or {})
+    if value:
+        entry["render"] = value
+        entry["render_set"] = True
+        entry["updated"] = _now()
+    else:
+        entry.pop("render", None)
+        entry.pop("render_set", None)
+    if entry:
+        games[gid] = entry
+    else:
+        games.pop(gid, None)
+    save(games)
+    return entry
 
 
 def _now():

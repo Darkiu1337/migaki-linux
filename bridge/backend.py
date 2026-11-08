@@ -24,6 +24,10 @@ def _is_benign_log_line(line):
     low = line.lower()
     if "wayland not detected, starting in x11" in low:
         return True
+    # gamescope's xwm repeats this every frame of an upscaled run; the per-game
+    # log file keeps it, the dialog's run log does not.
+    if "got the same buffer committed twice" in low:
+        return True
     if "account_consistency_mode_manager" in low:
         return True
     if "chrome/browser/push_messaging" in low:
@@ -31,6 +35,21 @@ def _is_benign_log_line(line):
     if "wayland_object.cc" in low and "binding to" in low:
         return True
     return False
+
+
+def run_mode(game, unfiltered=False):
+    """Human label for what a launch actually runs: the shader chain and the
+    overlay are not implied by CuNNy, so spell every part out."""
+    if unfiltered:
+        return "unfiltered A/B (no shaders, no overlay, no upscale)"
+    parts = []
+    if game.get("upscale") == "1":
+        parts.append("2x upscale (CuNNy)")
+    parts.append("shaders off" if commands.filter_disabled(game)
+                 else "shaders %s" % game.get("variant", ""))
+    if game.get("hud") == "1":
+        parts.append("overlay on")
+    return " + ".join(parts)
 
 
 class Backend:
@@ -201,6 +220,8 @@ class Backend:
         ]
         if g.get("runner") == "proton":
             lines.append(f"Prefix: {g.get('prefix_mode', 'shared')}")
+        if commands.filter_disabled(g):
+            lines.append("Shaders: off (no vkBasalt chain; variant unused)")
         if g.get("lang"):
             lines.append(f"Language: {g.get('lang')}")
         if tr.get("enabled") == "1":
@@ -222,6 +243,7 @@ class Backend:
         rec = upscale.recommend(prof)
         data["upscale_profile"] = {
             "render": prof["render"],
+            "render_set": prof["render_set"],
             "output": prof["output"],
             "verdict": rec["verdict"],
             "note": rec["note"],
@@ -243,6 +265,10 @@ class Backend:
         reason = library.validate_entry(data)
         if reason:
             return {"error": reason}
+        # The explicit render belongs to the upscale profile (upscale.json),
+        # not to the library record: the wizard sends it beside the form.
+        render_set = "upscale_render" in data
+        render = str(data.pop("upscale_render", "") or "").strip()
         games = store.load_games()
         if gid:
             prev = games.get(gid, {})
@@ -250,6 +276,8 @@ class Backend:
             store.save_games(games)
         else:
             gid = store.new_game(games, data)
+        if render_set:
+            upscale.set_render(gid, render)
         self.refresh_and_emit()
         return {"gid": gid}
 
@@ -262,7 +290,10 @@ class Backend:
         game = store.load_games().get(gid)
         if not game:
             return {"command": ""}
-        return {"command": " ".join(commands.build_command(game, gid))}
+        command = " ".join(commands.build_command(game, gid))
+        if commands.filter_disabled(game):
+            command = "DISABLE_VKBASALT=1 " + command
+        return {"command": command}
 
     # -- launching ----------------------------------------------------------
 
@@ -296,14 +327,16 @@ class Backend:
             start_new_session=True, env=env)
 
     def _start_game(self, gid, game, unfiltered):
-        argv = commands.build_command(game, gid)
-        env = dict(os.environ)
         if unfiltered:
-            for var in paths.VKBASALT_ENV_VARS:
-                env.pop(var, None)
-            env["DISABLE_VKBASALT"] = "1"
+            # The A/B baseline: no shader chain, no MangoHud, no gamescope.
+            argv = commands.build_unfiltered_command(game, gid)
+        else:
+            argv = commands.build_command(game, gid)
+        env = dict(os.environ)
+        if unfiltered or commands.filter_disabled(game):
+            commands.disable_filter_env(env)
         stamp = datetime.datetime.now().strftime("%H:%M:%S")
-        mode = "unfiltered A/B" if unfiltered else f"filtered ({game.get('variant', '')})"
+        mode = run_mode(game, unfiltered)
         self._emit("log_clear")
         self._log(f"[{stamp}] {game.get('name', gid)} — {mode}")
         self._log(f"$ {' '.join(argv)}\n")
@@ -396,13 +429,20 @@ class Backend:
 
     def _start_translate(self, gid, game, setup):
         argv = commands.build_translate_command(game, gid, setup)
+        env = dict(os.environ)
+        filtered = not commands.filter_disabled(game)
+        if not filtered:
+            commands.disable_filter_env(env)
         stamp = datetime.datetime.now().strftime("%H:%M:%S")
         self._emit("log_clear")
-        mode = "setup (pick the text hook)" if setup else "filtered + translation"
+        if setup:
+            mode = "setup (pick the text hook)"
+        else:
+            mode = "filtered + translation" if filtered else "translation (shaders off)"
         self._log(f"[{stamp}] {game.get('name', gid)} — {mode}")
         self._log(f"$ {' '.join(argv)}\n")
         try:
-            proc = self._spawn(argv)
+            proc = self._spawn(argv, env)
         except (OSError, subprocess.SubprocessError):
             return {"result": "error",
                     "message": "Failed to start the translation launcher."}
@@ -483,17 +523,18 @@ class Backend:
             textbox = self.textbox_proc
         if proc is not None:
             self._log("stopping…")
-            try:
-                proc.terminate()
-            except OSError:
-                pass
+            # The whole group, not just the wrapper: gamescope-migaki.sh ignores
+            # TERM on purpose (its trap records the upscale note before exiting)
+            # while gamescope and tee do not, so this ends the pipeline and lets
+            # the wrapper write `upscale.json` on its own terms.
+            process.kill_group(proc, signal.SIGTERM)
         # Close the DeepL browser cleanly first (tabs + Browser.close), so it
         # never session-restores a pile of tabs; kill is the fallback.
         if process.close_translator_browser():
             self._log("translation browser closed.")
         if textbox is not None and textbox.poll() is None:
             self._log("stopping translation readout…")
-            process.kill_textbox_group(textbox, signal.SIGTERM)
+            process.kill_group(textbox, signal.SIGTERM)
         threading.Timer(3.0, self._force_stop).start()
         return {}
 
@@ -502,10 +543,7 @@ class Backend:
             proc = self.proc
             gid = self._running_gid
         if proc is not None and proc.poll() is None:
-            try:
-                proc.kill()
-            except OSError:
-                pass
+            process.kill_group(proc, signal.SIGKILL)
         if proc is not None and gid:
             game = store.load_games().get(gid)
             if game and process.kill_strays(process.stray_token(game)):
@@ -516,7 +554,7 @@ class Backend:
         textbox = self.textbox_proc
         if textbox is not None:
             if textbox.poll() is None:
-                process.kill_textbox_group(textbox, signal.SIGKILL)
+                process.kill_group(textbox, signal.SIGKILL)
                 self._log("translation readout stopped.")
             self.textbox_proc = None
         process.close_translator_browser()

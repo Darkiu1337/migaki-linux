@@ -7,7 +7,7 @@ use gpui::prelude::*;
 use gpui::{AnyElement, ClickEvent, Context, SharedString, Window, div, px};
 use serde_json::json;
 
-use crate::app::{FieldId, MainView, Modal, Proton};
+use crate::app::{ComboKind, FieldId, MainView, Modal, Proton};
 use crate::theme::Theme;
 use crate::ui::button::{Variant, button};
 use crate::ui::combo::{ComboItem, ComboState, combo};
@@ -158,10 +158,7 @@ impl SettingsState {
             &self.proton,
             None,
             cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Settings(state) = &mut this.modal {
-                    state.proton.open = !state.proton.open;
-                }
-                cx.notify();
+                this.toggle_combo(ComboKind::SettingsProton, cx);
             }),
             {
                 let entity = entity.clone();
@@ -208,10 +205,7 @@ impl SettingsState {
             &self.font,
             None,
             cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Settings(state) = &mut this.modal {
-                    state.font.open = !state.font.open;
-                }
-                cx.notify();
+                this.toggle_combo(ComboKind::SettingsFont, cx);
             }),
             {
                 let entity = entity.clone();

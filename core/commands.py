@@ -41,6 +41,9 @@ def build_command(game, gid=None):
     what lets the wrapper record the run in the per-game upscale profile. The
     filter name is literal: cunny is the only model validated end to end, and
     the profile's `filter` field is display-only.
+
+    `"shaders": "0"` is not an argv concern: callers pass the result to
+    `disable_filter_env` so the runner scrubs vkBasalt (see `filter_disabled`).
     """
     runner = game["runner"]
     variant = game.get("variant", "L")
@@ -97,6 +100,31 @@ def _with_upscale(game, gid, argv):
     print("warning: upscale requested but gamescope is not installed — "
           "launching without the filter", file=sys.stderr)
     return argv
+
+
+def filter_disabled(game):
+    """True when the entry asked for no shader chain (`"shaders": "0"`)."""
+    return game.get("shaders") == "0"
+
+
+def disable_filter_env(env):
+    """Scrub every inherited vkBasalt variable and set the structural off
+    switch (`DISABLE_VKBASALT=1`), which the runners honour by exporting no
+    layer at all."""
+    for var in paths.VKBASALT_ENV_VARS:
+        env.pop(var, None)
+    env["DISABLE_VKBASALT"] = "1"
+    return env
+
+
+def build_unfiltered_command(game, gid=None):
+    """The A/B baseline: same runner and variant, but no MangoHud overlay and
+    no gamescope/CuNNy wrapper. The caller still has to disable the shader
+    chain itself (`disable_filter_env`)."""
+    baseline = dict(game)
+    baseline["hud"] = "0"
+    baseline["upscale"] = "0"
+    return build_command(baseline, gid)
 
 
 def build_translate_command(game, gid, setup=False):

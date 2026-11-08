@@ -222,9 +222,10 @@ def close_translator_browser(timeout=4):
         return False
 
 
-def kill_textbox_group(proc, sig):
-    """Signal the textbox process group (backend + translator browser it
-    spawned). Returns True if a live group was signaled."""
+def kill_group(proc, sig):
+    """Signal a runner's whole process group (the wrapper plus the gamescope
+    pipeline it started, or the textbox backend plus its translator browser).
+    Returns True if a live group was signaled."""
     try:
         if proc is None or proc.poll() is not None:
             return False

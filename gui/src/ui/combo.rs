@@ -1,9 +1,12 @@
 //! Dropdown: a button showing the selected label plus an `anchored` popup
 //! card (label and stored value are separate, e.g. the GPU list's
 //! "  (display)" suffix and the variant notes).
+use std::time::Duration;
+
 use gpui::prelude::*;
 use gpui::{
-    AnyElement, App, ClickEvent, ElementId, FocusHandle, Pixels, SharedString, Window, div, px,
+    Animation, AnimationExt, AnyElement, App, ClickEvent, ElementId, FocusHandle, Pixels,
+    SharedString, Window, div, px,
 };
 
 use crate::theme::Theme;
@@ -24,6 +27,8 @@ pub struct ComboState {
     pub items: Vec<ComboItem>,
     pub selected: usize,
     pub open: bool,
+    /// False greys the trigger and makes it inert (the carried value stays).
+    pub enabled: bool,
     pub focus: FocusHandle,
 }
 
@@ -33,6 +38,7 @@ impl ComboState {
             items,
             selected: 0,
             open: false,
+            enabled: true,
             focus: cx.focus_handle(),
         }
     }
@@ -102,17 +108,20 @@ pub fn combo(
         .gap(px(theme.sm))
         .rounded(px(radius))
         .border_1()
-        .border_color(border)
+        .border_color(if state.enabled { border } else { theme.text_disabled })
         .bg(theme.background)
         .font_family(family.clone())
         .text_size(px(text_size))
-        .text_color(text_color)
-        .cursor_pointer()
-        .track_focus(&state.focus)
-        .hover(move |style| style.bg(hover))
-        .on_click(on_toggle)
+        .text_color(if state.enabled { text_color } else { theme.text_disabled })
         .child(div().truncate().child(state.label()))
         .child(div().text_color(theme.text_secondary).child("▾"));
+    if state.enabled {
+        trigger = trigger
+            .cursor_pointer()
+            .track_focus(&state.focus)
+            .hover(move |style| style.bg(hover))
+            .on_click(on_toggle);
+    }
     trigger = match width {
         Some(w) => trigger.w(w),
         None => trigger.flex_1().min_w(px(0.)),
@@ -158,14 +167,26 @@ pub fn combo(
 
     let mut wrapper = div()
         .id(SharedString::from(format!("combo-wrap-{id}")))
+        .relative()
         .flex()
         .flex_col();
     wrapper = wrapper.child(trigger);
     if state.open && !state.items.is_empty() {
-        // Inline list: an `anchored` popup is clipped to the parent row, so the
-        // options were cut off after a row or two. Expanding in place keeps
-        // every entry reachable inside a scrolling dialog.
-        wrapper = wrapper.child(rows);
+        // Overlay, not inline: the list must not grow the dialog (that made
+        // every page scroll and pushed later rows aside). `absolute` keeps it
+        // out of the flex flow; `deferred` paints it above the rows that
+        // follow the trigger.
+        let popup = rows
+            .absolute()
+            .top(px(control_height + theme.sm))
+            .left(px(0.))
+            .w(popup_width)
+            .with_animation(
+                SharedString::from(format!("{prefix}-popup-anim")),
+                Animation::new(Duration::from_millis(90)),
+                |popup, t| popup.opacity(t),
+            );
+        wrapper = wrapper.child(gpui::deferred(popup).with_priority(1));
     }
     wrapper.into_any_element()
 }
