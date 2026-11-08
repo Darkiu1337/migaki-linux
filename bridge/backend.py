@@ -14,7 +14,7 @@ import sys
 import threading
 import time
 
-from core import commands, icons, library, paths, process, store, system
+from core import commands, icons, library, paths, process, store, system, upscale
 
 
 def _is_benign_log_line(line):
@@ -133,11 +133,13 @@ class Backend:
             if ip is None and gid not in self._icon_attempted:
                 missing.append(gid)
             tr = (g.get("translate") or {}).get("enabled") == "1"
+            up = g.get("upscale") == "1"
             rows.append({
                 "gid": gid,
                 "name": g.get("name", gid),
                 "info": f"{g.get('runner', '?')}, {g.get('variant', '?')}"
-                        f"{', +translate' if tr else ''}",
+                        f"{', +translate' if tr else ''}"
+                        f"{', +upscale' if up else ''}",
                 "icon": ip or "",
             })
         self._want_icons(missing)
@@ -213,7 +215,21 @@ class Backend:
         return {"name": g.get("name", gid), "lines": lines}
 
     def game_data(self, gid):
-        return store.load_games().get(gid, {})
+        """The stored record plus the upscale profile the wizard shows next to
+        the toggle (the wizard ignores unknown keys when it saves)."""
+        data = dict(store.load_games().get(gid, {}))
+        prof = upscale.profile(gid)
+        rec = upscale.recommend(prof)
+        data["upscale_profile"] = {
+            "render": prof["render"],
+            "output": prof["output"],
+            "verdict": rec["verdict"],
+            "note": rec["note"],
+            "observed_input": prof["observed_input"],
+            "observed_cnn": prof["observed_cnn"],
+            "engine": prof["engine"],
+        }
+        return data
 
     def validate(self, data):
         try:

@@ -35,9 +35,9 @@ def normalize_edit(data, prev):
     data["runner"] = prev.get("runner", data.get("runner", "proton"))
     if "wow64" in prev:
         data["wow64"] = prev["wow64"]
-    # The wizard has no upscale control; a save from it must not drop the flag
-    # the TUI/CLI set.
-    if "upscale" in prev:
+    # The wizard's Performance page carries the upscale toggle; only a caller
+    # that omits the key (an older client) keeps the flag the TUI/CLI set.
+    if "upscale" not in data and "upscale" in prev:
         data["upscale"] = prev["upscale"]
     tr_prev = prev.get("translate", {})
     tr = data.setdefault("translate", {})

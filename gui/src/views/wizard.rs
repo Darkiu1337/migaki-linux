@@ -41,6 +41,8 @@ pub struct WizardState {
     pub gpu: ComboState,
     pub lang: ComboState,
     pub hud: bool,
+    pub upscale: bool,
+    pub upscale_info: String,
     pub prefix_game: bool,
     pub tr_enable: bool,
     pub show_browser: bool,
@@ -128,6 +130,26 @@ fn text_of(value: &Value, key: &str) -> String {
         .and_then(Value::as_str)
         .unwrap_or_default()
         .to_string()
+}
+
+/// One line describing the recorded upscale profile (`game.data` ships it as
+/// `upscale_profile`).
+fn upscale_line(profile: Option<&Value>) -> String {
+    let Some(profile) = profile else {
+        return String::new();
+    };
+    let render = text_of(profile, "render");
+    let output = text_of(profile, "output");
+    let verdict = text_of(profile, "verdict");
+    let note = text_of(profile, "note");
+    if verdict.is_empty() {
+        return format!("Base {render} -> {output}");
+    }
+    if note.is_empty() {
+        format!("Base {render} -> {output} | {verdict}")
+    } else {
+        format!("Base {render} -> {output} | {verdict}: {note}")
+    }
 }
 
 /// Label column plus a control that fills the rest of the row.
@@ -242,6 +264,8 @@ impl WizardState {
             gpu,
             lang,
             hud: false,
+            upscale: false,
+            upscale_info: String::new(),
             prefix_game: false,
             tr_enable: false,
             show_browser: false,
@@ -273,6 +297,8 @@ impl WizardState {
         };
         self.fps.set_value(value);
         self.hud = text_of(data, "hud") == "1";
+        self.upscale = text_of(data, "upscale") == "1";
+        self.upscale_info = upscale_line(data.get("upscale_profile"));
         let lang = text_of(data, "lang");
         if !lang.is_empty() && !self.lang.select_value(&lang) {
             self.lang.items.push(ComboItem::new(lang.clone(), lang));
@@ -329,6 +355,7 @@ impl WizardState {
             "gpu": self.gpu.value(),
             "fps": if fps == 0 { "off".to_string() } else { fps.to_string() },
             "hud": if self.hud { "1" } else { "0" },
+            "upscale": if self.upscale { "1" } else { "0" },
             "lang": self.lang.value(),
             "prefix_mode": if self.prefix_game { "game" } else { "shared" },
             "translate": {
@@ -746,6 +773,23 @@ impl WizardState {
                 cx.notify();
             }),
         );
+        let upscale = checkbox(
+            theme,
+            "wizard-upscale",
+            "2x upscale (gamescope + CuNNy)",
+            self.upscale,
+            true,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.upscale = !state.upscale;
+                }
+                cx.notify();
+            }),
+        );
+        let upscale_note = div()
+            .text_size(px(theme.body_small))
+            .text_color(theme.text_secondary)
+            .child(self.upscale_info.clone());
         let lang = combo(
             theme,
             "wizard-lang",
@@ -804,6 +848,8 @@ impl WizardState {
         column
             .child(field_row(theme, "FPS cap (0 = off):", fps))
             .child(hud)
+            .child(upscale)
+            .child(upscale_note)
             .child(field_row(theme, "Language:", lang))
             .child(prefix)
             .into_any_element()
