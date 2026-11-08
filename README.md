@@ -112,8 +112,8 @@ migaki                       # TUI  |  migaki-gui  # gpui GUI
 
 Per-distro package names and prerequisites: `requirements.md`. A working Vulkan
 **driver + loader** is assumed — the installer does not install graphics
-drivers. `install.sh` downloads the prebuilt Rust GUI from the pinned `gui-v4`
-release (sha256-verified — nothing is compiled), then installs
+drivers. `install.sh` uses the prebuilt Rust GUI committed in `gui/bin/`
+(nothing is compiled), then installs
 `~/.local/bin/migaki-gui` as a small wrapper (`MIGAKI_ROOT`) plus the `migaki`
 symlink (`vn-launch` / `vn-textbox` / `vn-translate` with translation support)
 and adds that directory to your shell `PATH`. One shared Wine prefix lives under
@@ -148,8 +148,9 @@ Bridge stderr is appended to `~/.cache/migaki/gui.log`. Set
   filter: pinned base, patches, shader sources, `build.sh` (see
   `gamescope/README.md`)
 * `gui/` — gpui (Rust) frontend: `src/` window/dialogs/theme, `bridge/` the
-  NDJSON client for `bridge/main.py`
+  NDJSON client for `bridge/main.py` (prebuilt binary in `gui/bin/`)
 * `translate/` — VN translation: hook launcher, DeepL bridge, Luna-style textbox
+  (`bridge-fixed/` holds the prebuilt bridge DLLs)
 * `shaders/` — ported `.fx` files + `gen_restore_fx.py` port generator
 * `docs/` — `limits.md` (constraints), `translate.md` (VN translation manual),
   `assets/` (gallery + usage video)

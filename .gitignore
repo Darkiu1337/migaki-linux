@@ -22,9 +22,8 @@ vkbasalt-*.conf
 # session transfer notes (local only, never publish)
 HANDOFF.md
 
-# Rust GUI build artifacts and the downloaded release binary
+# Rust GUI build artifacts (the shipped binary lives in gui/bin/ and is committed)
 gui/target/
-gui/bin/
 
 # VN-translate vendor binaries (fetched at install, never committed)
 translate/vendor/

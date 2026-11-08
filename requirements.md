@@ -86,16 +86,17 @@ The runtime libraries the shipped binary links are `libxkbcommon.so.0`,
 `libxkbcommon-x11.so.0`, `libxcb.so.1` and `libxcb-xkb.so.1`; `install.sh`
 checks them and installs the packages above.
 
-`install.sh` never compiles anything: it downloads the prebuilt
-`migaki-gui-x86_64` from the pinned `gui-v4` release and verifies its sha256.
+`install.sh` never compiles anything: it uses the prebuilt
+`migaki-gui-x86_64` committed in `gui/bin/`.
 Rust is only needed by developers who want a local build
 (`cargo build --release` in `gui/`, which additionally needs `pkg-config`,
-`libxkbcommon-dev`/`-devel` and `libxcb1-dev`/`libxcb-devel`).
+`libxkbcommon-dev`/`-devel` and `libxcb1-dev`/`libxcb-devel`); refresh the
+committed binary with
+`cd gui && cargo build --release --locked && install -m755 target/release/migaki-gui bin/migaki-gui-x86_64 && strip bin/migaki-gui-x86_64`.
 
-`migaki-gui-x86_64` into `gui/bin/`. It installs `~/.local/bin/migaki-gui`
+From that checkout the installer installs `~/.local/bin/migaki-gui`
 as a wrapper that exports `MIGAKI_ROOT`, and a `migaki-gui.desktop` entry
-(`StartupWMClass=migaki`). `gui-release.yml` publishes that asset from a
-`gui-v*` tag.
+(`StartupWMClass=migaki`).
 
 The GUI reads omarchy's live theme files
 (`~/.local/state/omarchy/current/theme/{colors,shell}.toml`) at start and repolls

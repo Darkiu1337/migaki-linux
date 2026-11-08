@@ -257,10 +257,8 @@ download_asset() {
   curl -L --retry 3 --retry-all-errors --max-time 300 \
     -o "$dest/$asset" "https://github.com/$repo/releases/download/$tag/$asset"
 }
-# gpui GUI binary: built by .github/workflows/gui-release.yml and published as
-# a release asset. The installer only downloads it — users never compile.
-MIGAKI_REPO="${MIGAKI_REPO:-Darkiu1337/migaki-linux}"
-GUI_TAG="${GUI_RELEASE_TAG:-gui-v4}"
+# gpui GUI binary: committed in the checkout (gui/bin/migaki-gui-x86_64), so a
+# clone installs offline; users never compile.
 GUI_ASSET="migaki-gui-x86_64"
 GUI_BIN=""
 
@@ -272,48 +270,6 @@ gui_binary_path() {
       return 0
     fi
   done
-  return 1
-}
-
-# Sets GUI_BIN: an existing build in the checkout, else the published release
-# asset. Users never compile anything; the binary is built by CI and verified
-# against its sha256. Returns 1 when no runnable binary is available.
-ensure_gui_binary() {
-  if GUI_BIN="$(gui_binary_path)"; then
-    return 0
-  fi
-  [ "$CHECK_ONLY" = "1" ] || [ "$DRY_RUN" = "1" ] && return 1
-  download_gui_asset && [ -n "$GUI_BIN" ]
-}
-
-# Download + checksum-verify migaki-gui-x86_64 (sets GUI_BIN on success).
-download_gui_asset() {
-  local arch
-  arch="$(uname -m)"
-  if [ "$arch" != "x86_64" ]; then
-    warn "no prebuilt gpui GUI for $arch (the release asset is x86_64 only)"
-    note "build it yourself with: cd gui && cargo build --release"
-    return 1
-  fi
-  mkdir -p "$ROOT/gui/bin"
-  local url="https://github.com/$MIGAKI_REPO/releases/download/$GUI_TAG/$GUI_ASSET"
-  local part="$ROOT/gui/bin/$GUI_ASSET.part"
-  note "downloading $GUI_ASSET from the $GUI_TAG release"
-  if curl -sLf --retry 3 --retry-all-errors --max-time 600 -o "$part" "$url" \
-     && curl -sLf --retry 3 --retry-all-errors --max-time 60 -o "$part.sha256" "$url.sha256"; then
-    local want got
-    want="$(cut -d' ' -f1 "$part.sha256" 2>/dev/null)"
-    got="$(sha256sum "$part" | cut -d' ' -f1)"
-    rm -f "$part.sha256"
-    if [ -n "$want" ] && [ "$want" = "$got" ]; then
-      mv "$part" "$ROOT/gui/bin/$GUI_ASSET"
-      chmod +x "$ROOT/gui/bin/$GUI_ASSET"
-      GUI_BIN="$ROOT/gui/bin/$GUI_ASSET"
-      return 0
-    fi
-    warn "GUI asset checksum mismatch (want $want, got $got)"
-  fi
-  rm -f "$part" "$part.sha256"
   return 1
 }
 
@@ -476,21 +432,28 @@ install__fetch_vendor() {
   vendor_dl "$WS64_URL" "$WS64_SHA" "$vdir/textractor_websocket_x64.zip" || return 1
 
   # Hardened bridge v2 (thread-tagged broadcast, needed by the in-app picker).
+  # The DLLs ship in the checkout (translate/bridge-fixed/), not as a release.
   if [ "$bridge" = "fixed" ]; then
-    local FIXED_SHA="acc84db3227dc833a4895b6242c1e3fb0353bd87a43a730a39a15d853006b114"
-    local TAG="${TRANSLATE_RELEASE_TAG:-translate-v2}"
-    local FIXED_URL="https://github.com/Darkiu1337/migaki-linux/releases/download/${TAG}/textractor_websocket_x86.dll"
-    if ! vendor_dl "$FIXED_URL" "$FIXED_SHA" "$vdir/textractor_websocket_x86.fixed.dll"; then
-      warn "fixed bridge asset unavailable (release '${TAG}' not published?); using the stock bridge"
-      note "publish the '${TAG}' release asset, or drop the DLL at $vdir/textractor_websocket_x86.fixed.dll"
-    fi
-    # x64 fork asset (thread-tagged broadcast for 64-bit titles), published
-    # alongside the x86 one in the same release.
-    local FIXED64_SHA="4e2f4e544b744ea8bb183f77074b876ce9f145ddeabf3d17ca305135f4b6727f"
-    local FIXED64_URL="https://github.com/Darkiu1337/migaki-linux/releases/download/${TAG}/textractor_websocket_x64.dll"
-    if ! vendor_dl "$FIXED64_URL" "$FIXED64_SHA" "$vdir/textractor_websocket_x64.fixed.dll"; then
-      note "x64 fixed bridge unavailable; 64-bit titles fall back to the stock x64 bridge"
-    fi
+    local arch FIXED_SHA src dst
+    for arch in x86 x64; do
+      case "$arch" in
+        x86) FIXED_SHA="acc84db3227dc833a4895b6242c1e3fb0353bd87a43a730a39a15d853006b114" ;;
+        x64) FIXED_SHA="4e2f4e544b744ea8bb183f77074b876ce9f145ddeabf3d17ca305135f4b6727f" ;;
+      esac
+      src="$ROOT/translate/bridge-fixed/textractor_websocket_${arch}.dll"
+      dst="$vdir/bridge-fixed/textractor_websocket_${arch}.dll"
+      if [ ! -f "$src" ]; then
+        warn "missing $src (the prebuilt bridge ships with the source)"
+      elif [ "$(sha256sum "$src" | cut -d' ' -f1)" != "$FIXED_SHA" ]; then
+        warn "checksum MISMATCH: $src (expected $FIXED_SHA)"
+      else
+        mkdir -p "$vdir/bridge-fixed"
+        cp -f "$src" "$dst"
+        note "bridge ($arch): fixed (sha256 ${FIXED_SHA:0:12})"
+      fi
+    done
+    [ -f "$vdir/bridge-fixed/textractor_websocket_x86.dll" ] \
+      || note "the in-app Text Hooker picker needs the fixed x86 bridge; stock is used otherwise"
   fi
 
   # Extract into the layout install__provision_textractor consumes (idempotent).
@@ -806,7 +769,7 @@ step_gui_deps() {
   if GUI_BIN="$(gui_binary_path)"; then
     ok "gpui GUI binary ($GUI_BIN)"
   else
-    note "gpui GUI not built yet — install.sh builds it with cargo after the packages, else downloads the $GUI_TAG release asset"
+    note "gpui GUI binary missing from the checkout: gui/bin/$GUI_ASSET (ships with the source)"
   fi
   local gui_lib
   for gui_lib in libxkbcommon.so.0 libxkbcommon-x11.so.0 libxcb.so.1 libxcb-xkb.so.1; do
@@ -830,14 +793,15 @@ step_gui_deps() {
 }
 
 # ===========================================================================
-# gpui GUI binary (build from source, or fetch the pinned release asset)
+# gpui GUI binary (shipped prebuilt in the checkout)
 # ===========================================================================
 step_gui_binary() {
   step "gpui GUI"
-  if ensure_gui_binary; then
+  if GUI_BIN="$(gui_binary_path)"; then
     ok "binary ready: $GUI_BIN"
   else
-    miss "gpui GUI binary (could not download the $GUI_TAG release asset)"
+    miss "gpui GUI binary missing: gui/bin/$GUI_ASSET (ships with the source)"
+    note "restore it with: git checkout -- gui/bin"
     missing=1
   fi
 }

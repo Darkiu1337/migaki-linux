@@ -195,8 +195,8 @@ stock-bridge installs simply keep following the selection). Manual control:
   picker. A/B proven. Rebuild from `translate/bridge-fork.patch`
   (rustup stable + `i686-pc-windows-gnu` + mingw-w64-gcc; the fork's
   `textractor.rs` decodes `"text name"` as UTF-16 — upstream passes a
-  `wchar_t*`); the prebuilt DLL is used from the `translate-v2` release asset
-  when published, else the stock build — sha256-verified at install.
+  `wchar_t*`); the prebuilt DLL is committed at `translate/bridge-fixed/` and
+  sha256-verified at install, else the stock build
 
 ## DeepL browser (hidden by default)
 
@@ -388,7 +388,7 @@ provisions **both architectures** under
 `vn-translate` into `~/.local/bin`. `vn-launch.sh` re-provisions/links on
 demand, so a prefix umu only creates on first launch is covered too — and it
 forces the bridge-only extension set every session. Both the x86 and x64
-fixed bridges are published in the `translate-v2` release and deployed per
+fixed bridges ship in `translate/bridge-fixed/` and are deployed per
 the game's PE bitness, so 64-bit titles get the tagged picker too; a title
 whose arch asset is missing falls back to the stock bridge (which only
 follows Textractor's own selection).
