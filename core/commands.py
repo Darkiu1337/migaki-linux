@@ -1,7 +1,7 @@
 import os
 import sys
 
-from . import paths, system
+from . import paths, system, upscale
 
 
 def gpu_vendor(name):
@@ -37,10 +37,12 @@ def build_command(game, gid=None):
     """Argv for a library entry (mirrors the bash runners).
 
     An entry with `"upscale": "1"` is wrapped in scripts/gamescope-migaki.sh
-    (the CuNNy 2x filter) when the packaged gamescope is installed; `gid` is
-    what lets the wrapper record the run in the per-game upscale profile. The
-    filter name is literal: cunny is the only model validated end to end, and
-    the profile's `filter` field is display-only.
+    (a 2x gamescope filter) when the packaged gamescope is installed; `gid` is
+    what lets the wrapper record the run in the per-game upscale profile and
+    what selects the upscaler: the profile's `filter` field (`cunny` = the
+    CuNNy 4x16-NVL network, `cunny-4x12`/`cunny-4x24`/`cunny-8x32` the other
+    vendored models, or gamescope's own `anime4k`/`fsr`/`nis`/`linear`/
+    `nearest`/`pixel`).
 
     `"shaders": "0"` is not an argv concern: callers pass the result to
     `disable_filter_env` so the runner scrubs vkBasalt (see `filter_disabled`).
@@ -96,7 +98,7 @@ def _with_upscale(game, gid, argv):
         return argv
     if gid and os.access(paths.GAMESCOPE_BIN, os.X_OK):
         return [os.path.join(paths.SCRIPTS_DIR, "gamescope-migaki.sh"),
-                "--filter", "cunny", "--gameid", gid, "--"] + argv
+                "--filter", upscale.filter_for(gid), "--gameid", gid, "--"] + argv
     print("warning: upscale requested but gamescope is not installed — "
           "launching without the filter", file=sys.stderr)
     return argv

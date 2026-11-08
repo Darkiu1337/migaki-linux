@@ -82,6 +82,7 @@ pub enum Modal {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ComboKind {
     WizardVariant,
+    WizardUpscaler,
     WizardGpu,
     WizardLang,
     SettingsProton,
@@ -105,6 +106,8 @@ pub struct MainView {
     pub focus: FocusHandle,
     pub variants: Vec<String>,
     pub variant_notes: HashMap<String, String>,
+    /// Upscalers the bridge offers: `(value, label)` in display order.
+    pub upscale_filters: Vec<(String, String)>,
     pub gpus: Vec<String>,
     pub display_vendors: Vec<String>,
     pub locales: Vec<String>,
@@ -154,6 +157,7 @@ impl MainView {
             focus: cx.focus_handle(),
             variants: Vec::new(),
             variant_notes: HashMap::new(),
+            upscale_filters: Vec::new(),
             gpus: Vec::new(),
             display_vendors: Vec::new(),
             locales: Vec::new(),
@@ -275,6 +279,22 @@ impl MainView {
                 .map(|(k, v)| (k.clone(), v.as_str().unwrap_or_default().to_string()))
                 .collect();
         }
+        self.upscale_filters = value
+            .get("upscale_filters")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|item| {
+                        (
+                            text_field_value(item, "value").to_string(),
+                            text_field_value(item, "label").to_string(),
+                        )
+                    })
+                    .filter(|(value, _)| !value.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
         self.gpus = strings(value.get("gpus"));
         self.display_vendors = strings(value.get("display_vendors"));
         self.locales = strings(value.get("locales"));
@@ -780,6 +800,7 @@ impl MainView {
         let open = {
             let target = match (&self.modal, kind) {
                 (Modal::Wizard(state), ComboKind::WizardVariant) => Some(&state.variant),
+                (Modal::Wizard(state), ComboKind::WizardUpscaler) => Some(&state.upscaler),
                 (Modal::Wizard(state), ComboKind::WizardGpu) => Some(&state.gpu),
                 (Modal::Wizard(state), ComboKind::WizardLang) => Some(&state.lang),
                 (Modal::Settings(state), ComboKind::SettingsProton) => Some(&state.proton),
@@ -794,10 +815,12 @@ impl MainView {
         match &mut self.modal {
             Modal::Wizard(state) => {
                 state.variant.open = false;
+                state.upscaler.open = false;
                 state.gpu.open = false;
                 state.lang.open = false;
                 match kind {
                     ComboKind::WizardVariant => state.variant.open = open,
+                    ComboKind::WizardUpscaler => state.upscaler.open = open,
                     ComboKind::WizardGpu => state.gpu.open = open,
                     ComboKind::WizardLang => state.lang.open = open,
                     _ => {}
@@ -833,6 +856,9 @@ impl MainView {
                 if state.variant.focus.is_focused(window) && state.variant.enabled {
                     return Some(&mut state.variant);
                 }
+                if state.upscaler.focus.is_focused(window) && state.upscaler.enabled {
+                    return Some(&mut state.upscaler);
+                }
                 if state.gpu.focus.is_focused(window) && state.gpu.enabled {
                     return Some(&mut state.gpu);
                 }
@@ -861,6 +887,9 @@ impl MainView {
             Modal::Wizard(state) => {
                 if state.variant.focus.is_focused(window) && state.variant.enabled {
                     return Some(ComboKind::WizardVariant);
+                }
+                if state.upscaler.focus.is_focused(window) && state.upscaler.enabled {
+                    return Some(ComboKind::WizardUpscaler);
                 }
                 if state.gpu.focus.is_focused(window) && state.gpu.enabled {
                     return Some(ComboKind::WizardGpu);
@@ -976,6 +1005,7 @@ impl MainView {
                     handles.push(state.variant.focus.clone());
                 }
                 handles.extend([
+                    state.upscaler.focus.clone(),
                     state.gpu.focus.clone(),
                     state.fps.field.focus.clone(),
                     state.render.focus.clone(),

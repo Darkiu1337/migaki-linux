@@ -53,13 +53,15 @@ upscaler exists (`migaki upscale <id>`); it is off unless you turn it on.
   a plain single-pass render.
 * **Optional 2x upscale** (per game, off by default) — a gamescope built from
   the pinned fork in `gamescope/` runs the game at its own resolution and
-  doubles it with the CuNNy 4x16-NVL network. Each game keeps a profile in
-  `~/.config/migaki/upscale.json` with the resolution it really renders at and
-  a verdict (`exact`, `downscale`, `upscale`, `disabled`); `migaki upscale
-  <id>` shows it and toggles the flag, and the GUI wizard can pin the render
-  size explicitly. The gamescope build is part of
-  `install.sh` and stays out of the way when it is missing. Limits:
-  `docs/limits.md`.
+  doubles it. The upscaler is chosen per game: four CuNNy networks ship with
+  the fork (4x12/4x16/4x24/8x32-NVL, `cunny` = 4x16) plus gamescope's own
+  `anime4k`, `fsr`, `nis`, `linear`, `nearest` and `pixel` filters. Each game
+  keeps a profile in `~/.config/migaki/upscale.json` with the upscaler, the
+  resolution it really renders at and a verdict (`exact`, `downscale`,
+  `upscale`, `disabled`); `migaki upscale <id>` shows it and toggles the flag,
+  and the editor's **Visuals** tab picks the upscaler and can pin the render
+  size explicitly. The gamescope build is part of `install.sh` and stays out of
+  the way when it is missing. Limits: `docs/limits.md`.
 * **GPU-aware** — an explicit GPU pick is honored; `auto` prefers the GPU that
   drives the active output (what you want on a hybrid laptop); set
   `MIGAKI_FORCE_GPU=1` to force the display renderer instead.

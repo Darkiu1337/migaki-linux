@@ -183,17 +183,23 @@ to never export `HOST_LC_ALL` (escape hatch if a title still dies with it).
 The Restore/Clear presets never change resolution. A separate path does: with
 `upscale=1` on a library entry, `core/commands.py` wraps the runner argv in
 `scripts/gamescope-migaki.sh`, which runs the game under a gamescope built from
-`gamescope/` and applies the CuNNy 4x16-NVL network (fixed 2x) to the game
-window's buffer.
+`gamescope/` and applies a fixed-2x upscale filter to the game window's buffer
+(CuNNy 4x16-NVL unless the game picked another one).
 
 * **Off by default.** The flag is per game (`migaki upscale <id>`,
   `python3 -m core set <id> upscale 1`). Without the packaged gamescope
   (`~/.local/lib/migaki/gamescope`) the launcher warns and runs the game
   normally, unfiltered.
 * **The in-game shader chain and the upscaler are exclusive.** The wrapper
-  keeps the runner's vkBasalt chain out of the process (that is what makes
-  CuNNy the only filter on the frame), so the wizard greys the shader switch
+  keeps the runner's vkBasalt chain out of the process (that is what makes the
+  upscaler the only filter on the frame), so the editor greys the shader switch
   out while `upscale=1`.
+* **The upscaler is per game.** `upscale.json`'s `filter` picks it, from the
+  ones the packaged gamescope supports: `cunny` (CuNNy 4x16-NVL, the default),
+  `cunny-4x12`, `cunny-4x24`, `cunny-8x32`, and gamescope's own `anime4k`,
+  `fsr`, `nis`, `linear`, `nearest`, `pixel`. The editor's **Visuals** tab
+  lists exactly that set; the choice is stored per game and used on the next
+  launch.
 * **The render size can be pinned.** `upscale.json`'s `render` is normally
   resolved (the engine's own base, else half the monitor); the GUI wizard's
   "Set the render resolution" writes it explicitly (`render_set` is the marker

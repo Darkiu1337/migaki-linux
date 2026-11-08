@@ -129,6 +129,8 @@ class Backend:
             "running": self._running_gid if self._running else None,
             "variants": variants,
             "variant_notes": {v: system.variant_note(v) for v in variants},
+            "upscale_filters": [{"value": name, "label": label}
+                                for name, label in upscale.FILTERS],
             "gpus": self.list_gpus(),
             "display_vendors": self.present_vendors(),
             "locales": ["System default"] + list(paths.LOCALES),
@@ -242,6 +244,7 @@ class Backend:
         prof = upscale.profile(gid)
         rec = upscale.recommend(prof)
         data["upscale_profile"] = {
+            "filter": prof["filter"],
             "render": prof["render"],
             "render_set": prof["render_set"],
             "output": prof["output"],
@@ -269,6 +272,8 @@ class Backend:
         # not to the library record: the wizard sends it beside the form.
         render_set = "upscale_render" in data
         render = str(data.pop("upscale_render", "") or "").strip()
+        filter_set = "upscale_filter" in data
+        upscaler = str(data.pop("upscale_filter", "") or "").strip()
         games = store.load_games()
         if gid:
             prev = games.get(gid, {})
@@ -278,6 +283,8 @@ class Backend:
             gid = store.new_game(games, data)
         if render_set:
             upscale.set_render(gid, render)
+        if filter_set:
+            upscale.set_filter(gid, upscaler)
         self.refresh_and_emit()
         return {"gid": gid}
 

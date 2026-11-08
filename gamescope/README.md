@@ -1,4 +1,4 @@
-# gamescope fork (CuNNy 4x16-NVL upscaler)
+# gamescope fork (CuNNy 2x upscale filters)
 
 This directory is the provenance record for the gamescope binary Migaki builds
 and installs into `~/.local/lib/migaki/gamescope`. Nothing here is vendored
@@ -8,15 +8,23 @@ are applied on top of it, and `build.sh` produces the binary.
 ```
 base.txt                                   pinned upstream (PR + commit + wlroots)
 patches/0001-wlroots-libinput-keypad-slide.patch
-patches/0002-cunny-4x16-nvl.patch
-patches/0003-migaki-upscale-line.patch
+patches/0002-cunny-nvl-models.patch
 shaders/CuNNy/                             copied into src/shaders/ before meson setup
+  gen_cunny.py                             Magpie HLSL -> GLSL compute shaders
+  4x12-NVL/ 4x16-NVL/ 4x24-NVL/ 8x32-NVL/  one directory per network
 build.sh                                   clone -> patch -> ninja -> install
 ```
 
 `base.txt` is one line: `<repo> <pr-ref> <commit> wlroots=<commit>`. The
 build fails, rather than compiling something else, when the upstream ref no
 longer resolves to the pinned commit.
+
+The fork adds one thing: `-F cunny` (CuNNy 4x16-NVL, the default),
+`-F cunny-4x12`, `-F cunny-4x24` and `-F cunny-8x32` run the vendored CuNNy
+networks on the game window's buffer, and gamescope's own `linear`, `nearest`,
+`fsr`, `nis`, `pixel` and `anime4k` keep working unchanged. Every model is one
+input pass, N conv passes and one out-shuffle pass over `channels / 4` RGBA
+targets; the patches carry the C++ side, `shaders/` the GLSL.
 
 ## Bumping the base
 
@@ -30,45 +38,35 @@ longer resolves to the pinned commit.
      src/rendervulkan.hpp src/shaders/descriptor_set.h
      src/shaders/descriptor_set_constants.h src/steamcompmgr.cpp`
      (the new shader files are **not** in this patch — `build.sh` copies
-     `shaders/` into the tree, so a patch that also created them would fail)
-   - `0003` — only the `MIGAKI_UPSCALE` line in `vulkan_composite`, so it
-     survives a regeneration of `0002`.
+     `shaders/` into the tree, so a patch that also created them would fail;
+     `MIGAKI_UPSCALE` is part of this patch because it lives inside the CuNNy
+     dispatch branch).
 4. `bash gamescope/build.sh --prefix /tmp/gsv --clean` and check the smoke
-   test prints the filter.
+   test prints the filters.
 
-## Adding another upscaler
+## Adding another CuNNy model
 
-Six places, in this order. Everything is keyed off a new
-`GamescopeUpscaleFilter` value, so a second model never touches the first.
+The host side is table-driven, so a model is data plus shaders:
 
-1. **`src/main.hpp`** — add the enum value to `GamescopeUpscaleFilter` (before
-   `FROM_VIEW`, which is internal).
-2. **`src/main.cpp`** — accept the name in the filter parser next to
-   `"cunny"`, and add the `--help` line (`cunny => CuNNy 4x16-NVL 2x CNN
-   upscaling`).
-3. **`src/rendervulkan.hpp`** — the `SHADER_TYPE_*` entries for every pass,
-   the pipeline accessor (`cunnyPipeline`) and its array
-   (`m_cunnyPipelines[6]`), and the intermediate textures in the output struct
-   (`cunnyA[4]`, `cunnyB[4]`, `cunnyOut`).
-4. **`src/rendervulkan.cpp`** — the `SHADER(CUNNY_4X16_*, …)` entries in
-   `createShaders`, a `create*Pipelines` function modelled on
-   `createCunnyPipelines` plus its call from `CVulkanDevice::init` (before
-   `compileAllPipelines` is spawned), and the
-   `else if ( frameInfo->useCunny4x16Layer0 )` branch in
-   `vulkan_composite`. The branch owns the dispatch chain and the final blit
-   into `compositeImage`; a model that emits a different scale must compute
-   `outX`/`outY` itself (CuNNy is fixed 2x).
-5. **`src/steamcompmgr.cpp` + the three backends** — set
-   `frameInfo.useCunny4x16Layer0` from `g_upscaleFilter` where the frame info
-   is built, and add the field to `bNeedsFullComposite` in
-   `DRMBackend.cpp`, `OpenVRBackend.cpp` and `WaylandBackend.cpp` (without
-   that, the backend takes the plane path and the filter never runs).
-6. **`src/meson.build`** — list the `.comp` files in `shader_src` so
-   `glslang` compiles them into the build. The sources themselves live in
-   `shaders/<model>/` here and are copied in by `build.sh`.
+1. **Shaders.** Drop `CuNNy-<model>.hlsl` next to the other models and run
+   `python3 gamescope/shaders/CuNNy/gen_cunny.py --model <model> --out
+   gamescope/shaders/CuNNy/<model> <path>`. The generator derives the channel
+   count (targets) from the HLSL and names each output after the model, because
+   gamescope's build derives one header name per shader source.
+2. **`src/main.hpp`** — one `CUNNY_<MODEL>_NVL` enum value, inside the
+   contiguous CuNNy block (`is_cunny_upscale_filter`/`cunny_upscale_model`
+   depend on that order).
+3. **`src/main.cpp`** — the `-F` name in the parser and the `--help` line.
+4. **`src/rendervulkan.hpp`** — `SHADER_TYPE_CUNNY_<MODEL>_{IN,CONVn,OUT}`
+   entries; bump `k_nCunnyModels` (and `k_nCunnyTargets` only if the model needs
+   more than 32 channels).
+5. **`src/rendervulkan.cpp`** — the `kCunnyModels[k_nCunnyModels]` row (pass
+   order, pass count, targets), the `SHADER(CUNNY_<MODEL>_*, …)` entries in
+   `createShaders`/`compileAllPipelines`, and the `#include`s.
+6. **`src/meson.build`** — list the `.comp` files in `shader_src`.
 
-Keep the `MIGAKI_UPSCALE input=… cnn=… out=…` stderr line in the new branch
-too: `scripts/gamescope-migaki.sh --gameid` parses it to record what the game
+Keep the `MIGAKI_UPSCALE input=… cnn=… out=…` stderr line in the dispatch
+branch: `scripts/gamescope-migaki.sh --gameid` parses it to record what the game
 actually rendered at.
 
 ### Licensing

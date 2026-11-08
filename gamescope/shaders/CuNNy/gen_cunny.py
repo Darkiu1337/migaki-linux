@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Generate GLSL compute shaders from the Magpie CuNNy 4x16-NVL HLSL model.
+"""Generate GLSL compute shaders from a Magpie CuNNy HLSL model.
 
-The HLSL is a linear sequence of //!PASS blocks.  Each conv pass declares
+The HLSL is a linear sequence of //!PASS blocks. Each conv pass declares
 input textures (INPUT or T0..T7), accumulates `r<n> += mul(s<tex>_<row>_<col>, M4(...))`
 terms and finishes with an optional bias, an optional ReLU and one or more
-texture stores.  Variables named s<tex>_<row>_<col> are reused for every input
+texture stores. Variables named s<tex>_<row>_<col> are reused for every input
 texture, so the (texture, offset) pair that applies to a `mul` is whatever was
 assigned to that name most recently.
 
@@ -12,9 +12,18 @@ HLSL `mul(vecN, M)` with a row-major literal is exactly GLSL `mat * vecN` with
 the same literal order (GLSL columns == HLSL rows), so the weight literals are
 emitted verbatim.
 
-Usage: gen_cunny.py [path/to/CuNNy-4x16-NVL.hlsl]
-Writes cs_cunny_in.comp, cs_cunny_conv1..4.comp and cs_cunny_out.comp next to
-this script.  Exits non-zero if the model does not match the expected shape.
+The channel width comes from the model itself: pass 1 stores one RGBA texture
+per four feature channels, and every later pass reads and writes that same
+number of targets. The storage-image bindings are the ones gamescope's
+descriptor set reserves for targets (1, 2, 7, 8, 9, 10, 11, 12), so a 12-, 16-,
+24- or 32-channel model needs 3, 4, 6 or 8 of them and nothing else changes.
+
+Usage: gen_cunny.py [--model NAME] [--out DIR] [path/to/CuNNy-<model>.hlsl]
+Writes cs_cunny_<model>_in.comp, cs_cunny_<model>_convN.comp and
+cs_cunny_<model>_out.comp into DIR (default: a directory next to this script
+named after the model). The model token is in the file name because gamescope's
+build names each generated shader header after its source stem.
+Exits non-zero if the model does not match the expected shape.
 """
 
 import math
@@ -22,7 +31,11 @@ import os
 import re
 import sys
 
-HEADER = """// Generated from CuNNy-4x16-NVL.hlsl (Blinue/CuNNy @ 5724c10e267fcfb19d4a92384e26d813f6c3e648).
+# gamescope's target bindings, in the order the host binds them
+# (src/shaders/descriptor_set_constants.h VKR_TARGET_SLOTS).
+TARGET_BINDINGS = (1, 2, 7, 8, 9, 10, 11, 12)
+
+HEADER = """// Generated from CuNNy-%s.hlsl (Blinue/CuNNy @ 5724c10e267fcfb19d4a92384e26d813f6c3e648).
 // LGPL-3.0/GPL-3.0 upstream; see licence.txt.
 """
 
@@ -52,9 +65,9 @@ class Pass:
     def __init__(self, number):
         self.number = number
         self.desc = ''
-        self.inputs = []
-        self.outputs = []
-        self.lmap = {}          # L index -> texture name
+        self.inputs = []        # textures in declaration order
+        self.outputs = []       # declared //!OUTPUT names
+        self.lmap = {}          # #define index -> texture name
         self.current = {}       # s<tex>_<row>_<col> -> (texture, dx, dy)
         self.terms = {}         # group -> [(samplerIdx, dx, dy, kind, values)]
         self.bias = {}          # group -> [values]
@@ -145,13 +158,23 @@ def relu_expr(name):
     return '    %s = max(%s, vec4(0.0));\n' % (name, name)
 
 
-def gen_in(p, path):
+def target_decls(slots):
+    """One writeonly storage image per RGBA target, at gamescope's bindings."""
+    if slots > len(TARGET_BINDINGS):
+        raise SystemExit('%d targets do not fit the %d reserved bindings'
+                         % (slots, len(TARGET_BINDINGS)))
+    return ['layout(binding = %d, rgba16f) writeonly uniform image2D dst%d;\n'
+            % (binding, i) for i, binding in enumerate(TARGET_BINDINGS[:slots])]
+
+
+def gen_in(p, path, slots, header):
     groups = sorted(p.terms)
-    assert groups == [0, 1, 2, 3], 'pass 1 groups %r' % groups
-    assert list(p.inputs) == ['INPUT'], 'pass 1 inputs %r' % p.inputs
-    out = [HEADER, PREAMBLE]
-    for i, binding in enumerate((1, 2, 7, 8)):
-        out.append('layout(binding = %d, rgba16f) writeonly uniform image2D dst%d;\n' % (binding, i))
+    if groups != list(range(slots)):
+        raise SystemExit('pass 1 writes groups %r, expected 0..%d' % (groups, slots - 1))
+    if list(p.inputs) != ['INPUT']:
+        raise SystemExit('pass 1 inputs %r' % p.inputs)
+    out = [header, PREAMBLE]
+    out.extend(target_decls(slots))
     out.append('''
 layout(binding = 3) uniform sampler2D s_samplers[16];
 
@@ -180,13 +203,16 @@ void main() {
     write(path, out)
 
 
-def gen_conv(p, path, index):
+def gen_conv(p, path, slots, header):
     groups = sorted(p.terms)
-    assert groups == [0, 1, 2, 3], 'pass %d groups %r' % (p.number, groups)
-    assert len(p.inputs) == 4, 'pass %d inputs %r' % (p.number, p.inputs)
-    out = [HEADER, PREAMBLE]
-    for i, binding in enumerate((1, 2, 7, 8)):
-        out.append('layout(binding = %d, rgba16f) writeonly uniform image2D dst%d;\n' % (binding, i))
+    if groups != list(range(slots)):
+        raise SystemExit('pass %d writes groups %r, expected 0..%d'
+                         % (p.number, groups, slots - 1))
+    if len(p.inputs) != slots:
+        raise SystemExit('pass %d reads %d textures, expected %d'
+                         % (p.number, len(p.inputs), slots))
+    out = [header, PREAMBLE]
+    out.extend(target_decls(slots))
     out.append('''
 layout(binding = 3) uniform sampler2D s_samplers[16];
 
@@ -215,14 +241,17 @@ void main() {
     write(path, out)
 
 
-def gen_out(p, path):
+def gen_out(p, path, slots, header):
     groups = sorted(p.terms)
-    assert groups == [0, 1, 2], 'out-shuffle groups %r' % groups
-    assert p.inputs == ['T0', 'T1', 'T2', 'T3'], 'out-shuffle inputs %r' % p.inputs
-    # The out-shuffle fetches the untouched original through a fifth sampler.
-    original_sampler = len(p.inputs)
+    if groups != [0, 1, 2]:
+        raise SystemExit('out-shuffle groups %r' % groups)
+    if len(p.inputs) != slots:
+        raise SystemExit('out-shuffle reads %d textures, expected %d'
+                         % (len(p.inputs), slots))
+    # The out-shuffle fetches the untouched original through the next sampler.
+    original_sampler = slots
 
-    out = [HEADER, PREAMBLE]
+    out = [header, PREAMBLE]
     out.append('layout(binding = 1, rgba8) writeonly uniform image2D dst;\n')
     out.append('''
 layout(binding = 3) uniform sampler2D s_samplers[16];
@@ -262,13 +291,41 @@ def write(path, lines):
     print('wrote %s' % path)
 
 
+def model_name(source):
+    """CuNNy-4x16-NVL.hlsl -> 4x16-NVL."""
+    stem = os.path.splitext(os.path.basename(source))[0]
+    return stem[len('CuNNy-'):] if stem.startswith('CuNNy-') else stem
+
+
 def main():
     here = os.path.dirname(os.path.abspath(__file__))
-    source = sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, 'CuNNy-4x16-NVL.hlsl')
-    passes = parse(source)
-    if len(passes) != 6:
-        raise SystemExit('expected 6 passes, got %d' % len(passes))
+    args = sys.argv[1:]
+    model = None
+    outdir = None
+    while args and args[0].startswith('--'):
+        if args[0] == '--model':
+            model = args[1]
+            del args[:2]
+        elif args[0] == '--out':
+            outdir = args[1]
+            del args[:2]
+        else:
+            raise SystemExit('unknown option %r' % args[0])
+    source = args[0] if args else None
+    model = model or (model_name(source) if source else '4x16-NVL')
+    source = source or os.path.join(here, 'CuNNy-%s.hlsl' % model)
+    outdir = outdir or os.path.join(here, model)
 
+    passes = parse(source)
+    if len(passes) < 3:
+        raise SystemExit('expected an input pass, conv passes and an out pass, got %d'
+                         % len(passes))
+    slots = len(set(passes[0].terms))
+    # Pass 1 expands RGB into the model's channels, the last pass is the
+    # out-shuffle (always r0..r2), everything in between is a conv pass.
+    conv = passes[1:-1]
+    if not conv:
+        raise SystemExit('no conv passes found')
     total = 0
     for p in passes:
         muls = sum(len(v) for v in p.terms.values())
@@ -276,28 +333,21 @@ def main():
         print('pass %d %-14s inputs=%-28s muls=%3d bias=%d relu=%d out=%s'
               % (p.number, p.desc, ','.join(p.inputs), muls, len(p.bias),
                  len(p.relu), ','.join(p.outputs)))
-    print('total muls = %d' % total)
+    print('model %s: %d passes, %d targets, total muls = %d'
+          % (model, len(passes), slots, total))
+    if slots < 1 or slots > len(TARGET_BINDINGS):
+        raise SystemExit('%d targets do not fit the reserved bindings' % slots)
 
-    expected = [
-        (1, 36, 4, 4),
-        (2, 144, 0, 4),
-        (3, 144, 0, 4),
-        (4, 144, 0, 4),
-        (5, 144, 0, 4),
-        (6, 108, 0, 0),
-    ]
-    for p, (number, muls, biases, relus) in zip(passes, expected):
-        assert p.number == number
-        got = (sum(len(v) for v in p.terms.values()), len(p.bias), len(p.relu))
-        if got != (muls, biases, relus):
-            raise SystemExit('pass %d: expected (muls, bias, relu)=%r, got %r'
-                             % (number, (muls, biases, relus), got))
-    assert total == 720, 'expected 720 muls, got %d' % total
-
-    gen_in(passes[0], os.path.join(here, 'cs_cunny_in.comp'))
-    for i in range(4):
-        gen_conv(passes[1 + i], os.path.join(here, 'cs_cunny_conv%d.comp' % (i + 1)), i + 1)
-    gen_out(passes[5], os.path.join(here, 'cs_cunny_out.comp'))
+    os.makedirs(outdir, exist_ok=True)
+    header = HEADER % model
+    # The file name is the GLSL->header stem gamescope's build generates, so it
+    # carries the model: four models cannot all ship `cs_cunny_in`.
+    prefix = 'cs_cunny_%s_' % model.lower().replace('-nvl', '').replace('-', '')
+    gen_in(passes[0], os.path.join(outdir, prefix + 'in.comp'), slots, header)
+    for index, p in enumerate(conv):
+        gen_conv(p, os.path.join(outdir, prefix + 'conv%d.comp' % (index + 1)),
+                 slots, header)
+    gen_out(passes[-1], os.path.join(outdir, prefix + 'out.comp'), slots, header)
 
 
 if __name__ == '__main__':

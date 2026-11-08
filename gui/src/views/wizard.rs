@@ -59,6 +59,7 @@ pub struct WizardState {
     pub name: FieldState,
     pub fps: SpinState,
     pub variant: ComboState,
+    pub upscaler: ComboState,
     pub gpu: ComboState,
     pub lang: ComboState,
     pub hud: bool,
@@ -84,22 +85,29 @@ fn is_display_gpu(app: &MainView, name: &str) -> bool {
         .any(|vendor| !vendor.is_empty() && lowered.contains(&vendor.to_lowercase()))
 }
 
+/// The vkBasalt variants are listed by name only: the chain's notes described
+/// GPU cost, not what a title should pick, so the quality is the label.
 fn variant_items(app: &MainView) -> Vec<ComboItem> {
     let items: Vec<ComboItem> = app
         .variants
         .iter()
-        .map(|name| {
-            let note = app.variant_notes.get(name).map_or("", String::as_str);
-            let label = if note.is_empty() {
-                name.clone()
-            } else {
-                format!("{name} — {note}")
-            };
-            ComboItem::new(label, name.clone())
-        })
+        .map(|name| ComboItem::new(name.clone(), name.clone()))
         .collect();
     if items.is_empty() {
         return vec![ComboItem::new("L", "L")];
+    }
+    items
+}
+
+/// Upscalers the bridge offers (gamescope `-F`), as `(value, label)` pairs.
+fn upscaler_items(app: &MainView) -> Vec<ComboItem> {
+    let items: Vec<ComboItem> = app
+        .upscale_filters
+        .iter()
+        .map(|(value, label)| ComboItem::new(label.clone(), value.clone()))
+        .collect();
+    if items.is_empty() {
+        return vec![ComboItem::new("CuNNy 4x16-NVL", "cunny")];
     }
     items
 }
@@ -284,6 +292,8 @@ impl WizardState {
     pub fn new(app: &MainView, gid: Option<String>, cx: &mut Context<MainView>) -> Self {
         let mut variant = ComboState::new(cx, variant_items(app));
         let _ = variant.select_value("L");
+        let mut upscaler = ComboState::new(cx, upscaler_items(app));
+        let _ = upscaler.select_value("cunny");
         let gpu = ComboState::new(cx, gpu_items(app));
         let lang = ComboState::new(cx, lang_items(app));
         WizardState {
@@ -293,6 +303,7 @@ impl WizardState {
             name: FieldState::new(cx),
             fps: SpinState::new(cx, 60, 0, 480, Some("off")),
             variant,
+            upscaler,
             gpu,
             lang,
             hud: false,
@@ -338,6 +349,9 @@ impl WizardState {
         self.variant.enabled = self.shaders && !self.upscale;
         self.upscale_info = upscale_line(data.get("upscale_profile"));
         if let Some(profile) = data.get("upscale_profile") {
+            // The profile always carries a filter (`cunny` when unset); an
+            // unknown name keeps the default selection instead of clearing it.
+            let _ = self.upscaler.select_value(&text_of(profile, "filter"));
             // Only an explicit user choice checks the box; a render the runs
             // resolved themselves must not look like one.
             self.render_set = profile
@@ -409,6 +423,7 @@ impl WizardState {
             } else {
                 String::new()
             },
+            "upscale_filter": self.upscaler.value(),
             "lang": self.lang.value(),
             "prefix_mode": if self.prefix_game { "game" } else { "shared" },
             "translate": {
@@ -882,8 +897,9 @@ impl WizardState {
             .into_any_element()
     }
 
-    /// Visuals tab: the shader switch and the variant it owns, the overlay, the
-    /// 2x upscale and the render mode it exposes.
+    /// Visuals tab: the run-wide overlay readout, the in-game vkBasalt chain
+    /// and the 2x upscale with the upscaler it runs and the render mode it
+    /// exposes.
     fn page_visuals(
         &self,
         app: &MainView,
@@ -892,6 +908,39 @@ impl WizardState {
     ) -> AnyElement {
         let theme = &app.theme;
         let entity = cx.entity();
+        let hud = checkbox(
+            theme,
+            "wizard-hud",
+            "Show fps overlay while playing",
+            self.hud,
+            true,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.hud = !state.hud;
+                }
+                cx.notify();
+            }),
+        );
+        // The CuNNy wrapper disables vkBasalt itself, so the in-game chain and
+        // the 2x upscale are mutually exclusive; grey the switch out while the
+        // upscaler owns the frame.
+        let shaders = checkbox(
+            theme,
+            "wizard-shaders",
+            "Anime4K shaders",
+            self.shaders,
+            !self.upscale,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                if let Modal::Wizard(state) = &mut this.modal {
+                    state.shaders = !state.shaders;
+                    state.variant.enabled = state.shaders && !state.upscale;
+                    if !state.variant.enabled {
+                        state.variant.open = false;
+                    }
+                }
+                cx.notify();
+            }),
+        );
         let variant = combo(
             theme,
             "wizard-variant",
@@ -914,43 +963,10 @@ impl WizardState {
                 }
             },
         );
-        let hud = checkbox(
-            theme,
-            "wizard-hud",
-            "Show fps overlay while playing",
-            self.hud,
-            true,
-            cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.hud = !state.hud;
-                }
-                cx.notify();
-            }),
-        );
-        // The CuNNy wrapper disables vkBasalt itself, so the in-game chain and
-        // the 2x upscale are mutually exclusive; grey the switch out while the
-        // upscaler owns the frame.
-        let shaders = checkbox(
-            theme,
-            "wizard-shaders",
-            "Anime4K shaders (off while 2x upscale is on)",
-            self.shaders,
-            !self.upscale,
-            cx.listener(|this, _event: &ClickEvent, _window, cx| {
-                if let Modal::Wizard(state) = &mut this.modal {
-                    state.shaders = !state.shaders;
-                    state.variant.enabled = state.shaders && !state.upscale;
-                    if !state.variant.enabled {
-                        state.variant.open = false;
-                    }
-                }
-                cx.notify();
-            }),
-        );
         let upscale = checkbox(
             theme,
             "wizard-upscale",
-            "2x upscale (gamescope + CuNNy)",
+            "2x upscale (gamescope)",
             self.upscale,
             true,
             cx.listener(|this, _event: &ClickEvent, _window, cx| {
@@ -963,6 +979,28 @@ impl WizardState {
                 }
                 cx.notify();
             }),
+        );
+        let upscaler = combo(
+            theme,
+            "wizard-upscaler",
+            "wizard-upscaler",
+            &self.upscaler,
+            None,
+            cx.listener(|this, _event: &ClickEvent, _window, cx| {
+                this.toggle_combo(ComboKind::WizardUpscaler, cx);
+            }),
+            {
+                let entity = entity.clone();
+                move |index, _event, _window, cx| {
+                    entity.update(cx, |this, cx| {
+                        if let Modal::Wizard(state) = &mut this.modal {
+                            state.upscaler.selected = index;
+                            state.upscaler.open = false;
+                        }
+                        cx.notify();
+                    });
+                }
+            },
         );
         let upscale_note = div()
             .text_size(px(theme.body_small))
@@ -1008,11 +1046,16 @@ impl WizardState {
             .flex()
             .flex_col()
             .gap(px(theme.lg))
-            .child(section_label(theme, "Filter and performance"))
+            .child(hud)
+            .child(divider(theme))
+            .child(section_label(theme, "In-game shaders"))
             .child(shaders)
             .child(field_row(theme, "Variant:", variant))
-            .child(hud)
+            .child(muted_line(theme, "Off while the 2x upscale runs: it owns the frame."))
+            .child(divider(theme))
+            .child(section_label(theme, "2x upscale"))
             .child(upscale)
+            .child(field_row(theme, "Upscaler:", upscaler))
             .child(upscale_note)
             .child(render_row)
             .child(muted_line(theme, RENDER_NOTE))

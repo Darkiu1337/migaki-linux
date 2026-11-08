@@ -913,11 +913,11 @@ step_gamescope_deps() {
 step_gamescope() {
   step "gamescope (CuNNy upscale filter)"
   if gamescope_installed; then
-    ok "gamescope (cunny) already installed ($(cat "$HOME/.local/lib/migaki/gamescope/VERSION" 2>/dev/null))"
+    ok "gamescope (CuNNy upscalers) already installed ($(cat "$HOME/.local/lib/migaki/gamescope/VERSION" 2>/dev/null))"
     return 0
   fi
   if [ "$CHECK_ONLY" = "1" ]; then
-    note "gamescope (cunny) not installed — upscale unavailable (run ./install.sh)"
+    note "gamescope (CuNNy upscalers) not installed — upscale unavailable (run ./install.sh)"
     return 0
   fi
   if [ "$DRY_RUN" = "1" ]; then
@@ -926,7 +926,7 @@ step_gamescope() {
   fi
   # Non-fatal: without it games still launch, just unfiltered.
   if bash "$ROOT/gamescope/build.sh" --prefix "$HOME/.local/lib/migaki/gamescope"; then
-    ok "gamescope (cunny) installed to ~/.local/lib/migaki/gamescope"
+    ok "gamescope (CuNNy upscalers) installed to ~/.local/lib/migaki/gamescope"
   else
     warn "gamescope build failed — games still launch, without the upscale filter."
     # The queued NOTES were already printed before this step runs, so the

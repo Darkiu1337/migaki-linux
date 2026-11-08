@@ -1,6 +1,6 @@
 #!/bin/bash
 # gamescope/build.sh — clone the pinned gamescope base, apply Migaki's patches
-# and install a gamescope with `-F cunny` into --prefix.
+# and install a gamescope with the CuNNy `-F` filters into --prefix.
 #
 # Usage: build.sh --prefix DIR [--jobs N] [--source DIR] [--clean]
 #
@@ -102,15 +102,16 @@ fi
 
 # --- 4. shader sources ----------------------------------------------------
 # 0002 only wires the .comp files into meson's shader_src; the sources
-# themselves are copied here first so the patch never creates them (a patch
-# that did would conflict with this copy on a rebuild).
+# themselves (one directory per CuNNy model) are copied here first so the patch
+# never creates them (a patch that did would conflict with this copy on a
+# rebuild).
 step "shaders"
 [ -d "$SHADERS/CuNNy" ] || die "missing $SHADERS/CuNNy"
 cp -a "$SHADERS/." "$SOURCE/src/shaders/"
 note "copied CuNNy shaders into src/shaders/"
 
 # --- 5. gamescope patches -------------------------------------------------
-for p in "$PATCHES"/0002-*.patch "$PATCHES"/0003-*.patch; do
+for p in "$PATCHES"/0002-*.patch; do
   [ -f "$p" ] || die "missing patch $(basename "$p")"
   git apply --3way "$p" || die "failed to apply $(basename "$p")"
   note "applied $(basename "$p")"
@@ -183,8 +184,8 @@ note "gamescope $(cat "$PREFIX/VERSION") -> $PREFIX/bin/gamescope"
 step "smoke test"
 help_out="$("$PREFIX/bin/gamescope" --help 2>&1 || true)"
 case "$help_out" in
-  *'cunny =>'*) note "gamescope --help lists the cunny filter" ;;
-  *) die "smoke test failed: 'gamescope --help' does not list the cunny filter" ;;
+  *'cunny-8x32 =>'*) note "gamescope --help lists the CuNNy filters" ;;
+  *) die "smoke test failed: 'gamescope --help' does not list the CuNNy filters" ;;
 esac
 
 printf '\ndone: %s\n' "$PREFIX/bin/gamescope"

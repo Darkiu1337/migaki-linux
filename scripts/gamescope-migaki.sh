@@ -4,7 +4,10 @@
 # Usage: gamescope-migaki.sh [options] [--] <command ...>
 #
 # Options:
-#   --filter NAME      upscale filter: linear | anime4k | cunny (default: cunny)
+#   --filter NAME      upscale filter (default: cunny)
+#                      CuNNy models: cunny (4x16-NVL), cunny-4x12, cunny-4x24,
+#                      cunny-8x32; gamescope's own: anime4k, fsr, nis, linear,
+#                      nearest, pixel
 #   --render WxH       resolution the game renders at (default: the game's
 #                      upscale profile, else 960x720)
 #   --output WxH       fullscreen resolution presented (default: the game's
@@ -84,8 +87,9 @@ done
 [ $# -gt 0 ] || die "no game command given (use -- before the command)"
 
 case "$FILTER" in
-  linear|nearest|anime4k|cunny) ;;
-  *) die "unknown --filter '$FILTER' (linear, nearest, anime4k, cunny)" ;;
+  cunny|cunny-4x12|cunny-4x16|cunny-4x24|cunny-8x32| \
+  anime4k|fsr|nis|linear|nearest|pixel) ;;
+  *) die "unknown --filter '$FILTER' (cunny, cunny-4x12, cunny-4x16, cunny-4x24, cunny-8x32, anime4k, fsr, nis, linear, nearest, pixel)" ;;
 esac
 
 # The packaged build first, then the dev checkout used while developing it.

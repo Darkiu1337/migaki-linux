@@ -29,6 +29,36 @@ from . import paths, store, system
 VERDICTS = ("exact", "downscale", "upscale", "disabled")
 DEFAULT_MONITOR = (1920, 1080)
 
+# What the packaged gamescope can run (`-F`). The CuNNy entries are the four
+# Magpie networks vendored in gamescope/shaders/CuNNy; `cunny` is the 4x16-NVL
+# model and stays the default so existing profiles keep their meaning.
+FILTERS = (
+    ("cunny", "CuNNy 4x16-NVL"),
+    ("cunny-4x12", "CuNNy 4x12-NVL"),
+    ("cunny-4x24", "CuNNy 4x24-NVL"),
+    ("cunny-8x32", "CuNNy 8x32-NVL"),
+    ("anime4k", "Anime4K 2x CNN UL"),
+    ("fsr", "FSR 1"),
+    ("nis", "NIS"),
+    ("linear", "Bilinear"),
+    ("nearest", "Nearest"),
+    ("pixel", "Pixel"),
+)
+FILTER_NAMES = tuple(name for name, _ in FILTERS)
+FILTER_LABELS = dict(FILTERS)
+DEFAULT_FILTER = "cunny"
+
+
+def normalize_filter(name):
+    """A selectable upscaler name, falling back to the default."""
+    candidate = (name or "").strip().lower()
+    return candidate if candidate in FILTER_LABELS else DEFAULT_FILTER
+
+
+def filter_for(gid):
+    """The upscaler stored for a game (`cunny` when none was chosen)."""
+    return normalize_filter((load().get(gid) or {}).get("filter"))
+
 
 def load():
     """The stored profiles, keyed by game id."""
@@ -165,7 +195,7 @@ def profile(gid):
         # carries the marker the wizard's checkbox reads.
         "render_set": bool(saved.get("render_set")),
         "output": saved.get("output") or "%dx%d" % mon,
-        "filter": saved.get("filter") or "cunny",
+        "filter": normalize_filter(saved.get("filter")),
         "observed_input": saved.get("observed_input", ""),
         "observed_cnn": saved.get("observed_cnn", ""),
         "verdict": saved.get("verdict", "disabled"),
@@ -272,6 +302,26 @@ def note(gid, input=None, cnn=None, out=None, render=None, output=None):
     games[gid] = entry
     save(games)
     return rec
+
+
+def set_filter(gid, value):
+    """Persist the upscaler for a game. The default needs no marker, so
+    choosing it drops the field instead of pinning it; a game with no other
+    recorded state leaves `upscale.json`."""
+    name = normalize_filter(value)
+    games = load()
+    entry = dict(games.get(gid) or {})
+    # Not an observation: `updated` stays whatever a run recorded.
+    if name == DEFAULT_FILTER:
+        entry.pop("filter", None)
+    else:
+        entry["filter"] = name
+    if entry:
+        games[gid] = entry
+    else:
+        games.pop(gid, None)
+    save(games)
+    return entry
 
 
 def set_render(gid, value):
